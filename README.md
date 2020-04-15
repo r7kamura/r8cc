@@ -4,22 +4,36 @@ A toy C compiler written in Rust.
 
 ## Usage
 
-`cargo run` takes a number and outputs assembly code that returns the number.
+`cargo run` takes a program and outputs assembly code that returns the calculated result.
 
 ```console
 $ cargo run
     Finished dev [unoptimized + debuginfo] target(s) in 0.04s
      Running `target/debug/r8cc`
 Usage: r8cc <PROGRAM>
+```
+
+Compile `1 + 2 - 3` to assembly code:
+
+```console
 $ cargo run -- "1 + 2 - 3"
     Finished dev [unoptimized + debuginfo] target(s) in 0.00s
      Running `target/debug/r8cc '1 + 2 - 3'`
 .intel_syntax noprefix
 .global main
 main:
-  mov rax, 1
-  add rax, 2
-  sub rax, 3
+  push 1
+  push 2
+  pop rdi
+  pop rax
+  add rax, rdi
+  push rax
+  push 3
+  pop rdi
+  pop rax
+  sub rax, rdi
+  push rax
+  pop rax
   ret
 ```
 
