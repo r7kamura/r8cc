@@ -1,21 +1,9 @@
+mod tokenizer;
+
+use tokenizer::Token;
+
 fn warn_usage() {
     eprintln!("Usage: r8cc <PROGRAM>");
-}
-
-fn consume_number(peekable: &mut std::iter::Peekable<std::str::Chars>) -> u32 {
-    let mut number = 0;
-
-    while let Some(&character) = peekable.peek() {
-        if character.is_ascii_digit() {
-            peekable.next();
-            number = number * 10 + character.to_digit(10).unwrap();
-        } else if character.is_whitespace() {
-            peekable.next();
-        } else {
-            break;
-        }
-    }
-    number
 }
 
 fn main() {
@@ -25,29 +13,43 @@ fn main() {
         return;
     }
 
-    let input = args.nth(1).unwrap();
-    let mut chars = input.chars().peekable();
-
-    let number = consume_number(&mut chars);
     println!(".intel_syntax noprefix");
     println!(".global main");
     println!("main:");
-    println!("  mov rax, {}", number);
-    while let Some(&character) = chars.peek() {
-        match character {
-            '+' => {
-                chars.next();
-                println!("  add rax, {}", consume_number(&mut chars));
-            },
-            '-' => {
-                chars.next();
-                println!("  sub rax, {}", consume_number(&mut chars));
-            },
-            ' ' => {
-                chars.next();
+
+    let input = args.nth(1).unwrap();
+    let mut tokens = tokenizer::tokenize(&input);
+
+    if let Some(token) = tokens.next() {
+        match token {
+            Token::Integer { value } => {
+                println!("  mov rax, {}", value);
             },
             _ => {
-                panic!("Unexpected token: '{}'", chars.next().unwrap());
+                warn_usage();
+                return;
+            }
+        }
+    } else {
+        warn_usage();
+        return;
+    }
+
+    let mut positive = true;
+    for token in tokens {
+        match token {
+            Token::Plus => {
+                positive = true;
+            },
+            Token::Minus => {
+                positive = false;
+            },
+            Token::Integer { value } => {
+                if positive {
+                    println!("  add rax, {}", value);
+                } else {
+                    println!("  sub rax, {}", value);
+                }
             },
         }
     }
