@@ -6,11 +6,21 @@ pub fn generate(node: Node) {
     println!("main:");
     process(node);
     println!("  pop rax");
+    println!("  mov rsp, rbp");
+    println!("  pop rbp");
     println!("  ret");
 }
 
 fn process(node: Node) {
     match node {
+        Node::Program { statements } => {
+            println!("  push rbp");
+            println!("  mov rbp, rsp");
+            println!("  sub rsp, 16"); // TODO: Adjust 16 for local variables count.
+            for statement in statements {
+                process(statement);
+            }
+        },
         Node::Integer { value } => {
             println!("  push {}", value);
         },
@@ -30,5 +40,35 @@ fn process(node: Node) {
             println!("  sub rax, rdi");
             println!("  push rax");
         },
+        Node::Assign { left, right } => {
+            process_address_of(*left);
+            process(*right);
+            store();
+        },
+        Node::LocalVariable { .. } => {
+            process_address_of(node);
+            load();
+        }
     }
+}
+
+fn process_address_of(node: Node) {
+    if let Node::LocalVariable { local_variable } = node {
+        println!("  mov rax, rbp");
+        println!("  sub rax, {}", local_variable.offset);
+        println!("  push rax");
+    }
+}
+
+fn load() {
+    println!("  pop rax");
+    println!("  mov rax, [rax]");
+    println!("  push rax");
+}
+
+fn store() {
+    println!("  pop rdi");
+    println!("  pop rax");
+    println!("  mov [rax], rdi");
+    println!("  push rdi");
 }

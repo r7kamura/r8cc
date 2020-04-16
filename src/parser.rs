@@ -1,7 +1,13 @@
+use std::collections::HashMap;
+use std::iter::Peekable;
+
 use crate::tokenizer::{Token, Tokens};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Node {
+    Program {
+        statements: Vec<Node>,
+    },
     Integer {
         value: u32,
     },
@@ -13,113 +19,192 @@ pub enum Node {
         left: Box<Node>,
         right: Box<Node>,
     },
+    Assign {
+        left: Box<Node>,
+        right: Box<Node>,
+    },
+    LocalVariable {
+        local_variable: LocalVariable,
+    },
 }
 
-pub fn parse(tokens: &mut std::iter::Peekable<Tokens>) -> Node {
-    parse_expression(tokens)
+pub fn parse(tokens: Peekable<Tokens>) -> Node {
+    let mut parser = Parser::new(tokens);
+    parser.parse()
 }
 
-// expression = number ("+" number | "-" number)*
-fn parse_expression(tokens: &mut std::iter::Peekable<Tokens>) -> Node {
-    let mut node = parse_number(tokens);
-    while let Some(token) = tokens.peek() {
-        match token {
-            Token::Plus => {
-                tokens.next();
-                let right = parse_number(tokens);
-                node = Node::Add {
-                    left: Box::new(node),
-                    right: Box::new(right),
-                };
-            },
-            Token::Minus => {
-                tokens.next();
-                let right = parse_number(tokens);
-                node = Node::Subtract {
-                    left: Box::new(node),
-                    right: Box::new(right),
-                };
-            },
-            _ => {},
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct LocalVariable {
+    pub name: String,
+    pub offset: usize,
+}
+
+struct Environment {
+    local_variables: HashMap<String, LocalVariable>,
+    offset: usize,
+}
+
+impl Environment {
+    fn add_local_variable(&mut self, name: String) -> LocalVariable {
+        self.offset += 8;
+        let local_variable = LocalVariable {
+            name: name.clone(),
+            offset: self.offset,
+        };
+        self.local_variables.insert(name.clone(), local_variable.clone());
+        local_variable
+    }
+
+    fn find_local_variable_by(&self, name: &str) -> Option<LocalVariable> {
+        self.local_variables.get(name).map(|v| v.clone())
+    }
+}
+
+struct Parser<'a> {
+    environment: Environment,
+    tokens: Peekable<Tokens<'a>>,
+}
+
+impl<'a> Parser<'a> {
+    fn new(tokens: Peekable<Tokens<'a>>) -> Self {
+        Self {
+            tokens,
+            environment: Environment {
+                local_variables: HashMap::new(),
+                offset: 0,
+            }
         }
     }
-    node
-}
 
-// number = INTEGER
-fn parse_number(tokens: &mut std::iter::Peekable<Tokens>) -> Node {
-    let token = tokens.next().expect("Expect token.");
-    match token {
-        Token::Integer { value } => {
-            Node::Integer { value }
-        },
-        _ => panic!("Expect Integer token.")
+    // program = statement*
+    // statement = expression ";"
+    // expression = assign
+    // assign = equality ("=" assign)?
+    // equality = relational ("==" relational | "!=" relational)*
+    // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+    // add = multiply ("+" multiply | "-" multiply)*
+    // multiply = unary ("*" unary | "/" unary)*
+    // unary = ("+" | "-")? primary
+    // primary = number | identifier | "(" expression ")"
+    fn parse(&mut self) -> Node {
+        let mut statements = Vec::new();
+        while self.tokens.peek().is_some() {
+            statements.push(self.parse_statement());
+        }
+        Node::Program {
+            statements,
+        }
+    }
+
+    fn parse_statement(&mut self) -> Node {
+        let node = self.parse_expression();
+        self.tokens.next();
+        node
+    }
+
+    fn parse_expression(&mut self) -> Node {
+        self.parse_assign()
+    }
+
+    fn parse_assign(&mut self) -> Node {
+        let mut node = self.parse_add();
+        if let Some(token) = self.tokens.peek() {
+            match token {
+                Token::Equal => {
+                    self.tokens.next();
+                    node = Node::Assign {
+                        left: Box::new(node),
+                        right: Box::new(self.parse_assign()),
+                    };
+                },
+                _ => {},
+            }
+        }
+        node
+    }
+
+    fn parse_add(&mut self) -> Node {
+        let mut node = self.parse_multiply();
+        while let Some(token) = self.tokens.peek() {
+            match token {
+                Token::Plus => {
+                    self.tokens.next();
+                    let right = self.parse_multiply();
+                    node = Node::Add {
+                        left: Box::new(node),
+                        right: Box::new(right),
+                    };
+                },
+                Token::Minus => {
+                    self.tokens.next();
+                    let right = self.parse_multiply();
+                    node = Node::Subtract {
+                        left: Box::new(node),
+                        right: Box::new(right),
+                    };
+                },
+                _ => {
+                    break;
+                },
+            }
+        }
+        node
+    }
+
+    fn parse_multiply(&mut self) -> Node {
+        self.parse_unary()
+    }
+
+    fn parse_unary(&mut self) -> Node {
+        self.parse_primary()
+    }
+
+    fn parse_primary(&mut self) -> Node {
+        let token = self.tokens.next().expect("Expect token.");
+        match token {
+            Token::Integer { value } => {
+                Node::Integer { value }
+            },
+            Token::Identifier { name } => {
+                Node::LocalVariable {
+                    local_variable: self.environment.find_local_variable_by(&name).
+                        unwrap_or_else(|| self.environment.add_local_variable(name))
+                }
+            },
+            _ => {
+                panic!("Unexpected token: `{:?}`", token);
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::tokenize;
-    use super::{Node, parse};
+    use super::{LocalVariable, Node, parse};
 
     #[test]
     fn test_parse_number() {
-        let mut tokens = tokenize("1").peekable();
+        let tokens = tokenize("1").peekable();
         assert_eq!(
-            parse(&mut tokens),
-            Node::Integer {
-                value: 1,
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::Integer {
+                        value: 1,
+                    },
+                ],
             }
         )
     }
 
     #[test]
     fn test_parse_add() {
-        let mut tokens = tokenize("1 + 2").peekable();
+        let tokens = tokenize("1 + 2").peekable();
         assert_eq!(
-            parse(&mut tokens),
-            Node::Add {
-                left: Box::new(
-                    Node::Integer {
-                        value: 1,
-                    }
-                ),
-                right: Box::new(
-                    Node::Integer {
-                        value: 2,
-                    }
-                )
-            }
-        )
-    }
-
-    #[test]
-    fn test_parse_subtract() {
-        let mut tokens = tokenize("1 - 2").peekable();
-        assert_eq!(
-            parse(&mut tokens),
-            Node::Subtract {
-                left: Box::new(
-                    Node::Integer {
-                        value: 1,
-                    }
-                ),
-                right: Box::new(
-                    Node::Integer {
-                        value: 2,
-                    }
-                )
-            }
-        )
-    }
-
-    #[test]
-    fn test_parse_add_and_subtract() {
-        let mut tokens = tokenize("1 + 2 - 3").peekable();
-        assert_eq!(
-            parse(&mut tokens),
-            Node::Subtract {
-                left: Box::new(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
                     Node::Add {
                         left: Box::new(
                             Node::Integer {
@@ -130,15 +215,145 @@ mod tests {
                             Node::Integer {
                                 value: 2,
                             }
-                        ),
-                    }
-                ),
-                right: Box::new(
-                    Node::Integer {
-                        value: 3,
-                    }
-                )
+                        )
+                    },
+                ],
             }
         )
+    }
+
+    #[test]
+    fn test_parse_subtract() {
+        let tokens = tokenize("1 - 2").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::Subtract {
+                        left: Box::new(
+                            Node::Integer {
+                                value: 1,
+                            }
+                        ),
+                        right: Box::new(
+                            Node::Integer {
+                                value: 2,
+                            }
+                        )
+                    },
+                ],
+            }
+        )
+    }
+
+    #[test]
+    fn test_parse_add_and_subtract() {
+        let tokens = tokenize("1 + 2 - 3").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::Subtract {
+                        left: Box::new(
+                            Node::Add {
+                                left: Box::new(
+                                    Node::Integer {
+                                        value: 1,
+                                    }
+                                ),
+                                right: Box::new(
+                                    Node::Integer {
+                                        value: 2,
+                                    }
+                                ),
+                            }
+                        ),
+                        right: Box::new(
+                            Node::Integer {
+                                value: 3,
+                            }
+                        )
+                    },
+                ],
+            }
+        )
+    }
+
+    #[test]
+    fn test_parse_local_variable() {
+        let tokens = tokenize("a").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::LocalVariable {
+                        local_variable: LocalVariable {
+                            name: "a".to_string(),
+                            offset: 8,
+                        },
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_assign() {
+        let tokens = tokenize("a = 1").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::Assign {
+                        left: Box::new(
+                            Node::LocalVariable {
+                                local_variable: LocalVariable {
+                                    name: "a".to_string(),
+                                    offset: 8,
+                                }
+                            }
+                        ),
+                        right: Box::new(
+                            Node::Integer {
+                                value: 1,
+                            }
+                        )
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_statements() {
+        let tokens = tokenize("a = 1; a").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::Assign {
+                        left: Box::new(
+                            Node::LocalVariable {
+                                local_variable: LocalVariable {
+                                    name: "a".to_string(),
+                                    offset: 8,
+                                },
+                            }
+                        ),
+                        right: Box::new(
+                            Node::Integer {
+                                value: 1,
+                            }
+                        )
+                    },
+                    Node::LocalVariable {
+                        local_variable: LocalVariable {
+                            name: "a".to_string(),
+                            offset: 8,
+                        },
+                    },
+                ],
+            }
+        );
     }
 }

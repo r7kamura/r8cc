@@ -18,7 +18,7 @@ fn main() {
     }
 
     let input = args.nth(1).unwrap();
-    let mut tokens = tokenize(&input).peekable();
-    let node = parse(&mut tokens);
+    let tokens = tokenize(&input).peekable();
+    let node = parse(tokens);
     generate(node);
 }

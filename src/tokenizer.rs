@@ -3,6 +3,7 @@ pub enum Token {
     Unknown,
     Plus,
     Minus,
+    Equal,
     Integer {
         value: u32,
     },
@@ -11,6 +12,9 @@ pub enum Token {
     },
     Character {
         value: char,
+    },
+    Identifier {
+        name: String,
     },
 }
 
@@ -52,6 +56,19 @@ impl Tokens<'_> {
         string
     }
 
+    fn consume_identifier(&mut self) -> String {
+        let mut string = String::new();
+        while let Some(&character) = self.chars.peek() {
+            if character.is_ascii_alphanumeric() {
+                string.push(character);
+                self.chars.next();
+            } else {
+                break;
+            }
+        }
+        string
+    }
+
     fn skip_whitespaces(&mut self) {
         while let Some(&character) = self.chars.peek() {
             if character.is_whitespace() {
@@ -78,6 +95,10 @@ impl Iterator for Tokens<'_> {
                     self.chars.next();
                     return Some(Token::Minus);
                 },
+                '=' => {
+                    self.chars.next();
+                    return Some(Token::Equal);
+                },
                 '"' => {
                     return Some(
                         Token::String {
@@ -97,6 +118,12 @@ impl Iterator for Tokens<'_> {
                         return Some(
                             Token::Integer {
                                 value: self.consume_number_literal(),
+                            }
+                        );
+                    } else if character.is_ascii_alphabetic() {
+                        return Some(
+                            Token::Identifier {
+                                name: self.consume_identifier(),
                             }
                         );
                     } else {
@@ -121,7 +148,7 @@ mod tests {
     use super::{Token, tokenize};
 
     #[test]
-    fn test_empty_string() {
+    fn test_tokenize_empty_string() {
         let tokens: Vec<Token> = tokenize("").collect();
         assert_eq!(
             tokens,
@@ -130,7 +157,7 @@ mod tests {
     }
 
     #[test]
-    fn test_whitespace() {
+    fn test_tokenize_whitespace() {
         let tokens: Vec<Token> = tokenize(" ").collect();
         assert_eq!(
             tokens,
@@ -139,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn test_integer_and_plus_and_minus() {
+    fn test_tokenize_integer_and_plus_and_minus() {
         let tokens: Vec<Token> = tokenize("1 + 2 - 3").collect();
         assert_eq!(
             tokens,
@@ -154,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn test_unknown_token() {
+    fn test_tokenize_unknown_token() {
         let tokens: Vec<Token> = tokenize("1 + あ").collect();
         assert_eq!(
             tokens,
@@ -167,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn test_string() {
+    fn test_tokenize_string() {
         let tokens: Vec<Token> = tokenize("\"dummy\"").collect();
         assert_eq!(
             tokens,
@@ -178,7 +205,7 @@ mod tests {
     }
 
     #[test]
-    fn test_character() {
+    fn test_tokenize_character() {
         let tokens: Vec<Token> = tokenize("'a'").collect();
         assert_eq!(
             tokens,
@@ -186,5 +213,18 @@ mod tests {
                 Token::Character { value: 'a' },
             ]
         );
+    }
+
+    #[test]
+    fn test_tokenize_assign() {
+        let tokens: Vec<Token> = tokenize("a = 1").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Identifier { name: "a".to_string() },
+                Token::Equal,
+                Token::Integer { value: 1 },
+            ]
+        )
     }
 }
