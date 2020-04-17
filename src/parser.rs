@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn test_parse_number() {
-        let tokens = tokenize("1").peekable();
+        let tokens = tokenize("1");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -280,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_parse_add() {
-        let tokens = tokenize("1 + 2").peekable();
+        let tokens = tokenize("1 + 2");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -304,7 +304,7 @@ mod tests {
 
     #[test]
     fn test_parse_subtract() {
-        let tokens = tokenize("1 - 2").peekable();
+        let tokens = tokenize("1 - 2");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_parse_add_and_subtract() {
-        let tokens = tokenize("1 + 2 - 3").peekable();
+        let tokens = tokenize("1 + 2 - 3");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_parse_local_variable() {
-        let tokens = tokenize("a").peekable();
+        let tokens = tokenize("a");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -379,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_parse_assign() {
-        let tokens = tokenize("a = 1").peekable();
+        let tokens = tokenize("a = 1");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_parse_statements() {
-        let tokens = tokenize("a = 1; a").peekable();
+        let tokens = tokenize("a = 1; a");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_parse_return() {
-        let tokens = tokenize("return 1;").peekable();
+        let tokens = tokenize("return 1;");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -458,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_parse_if() {
-        let tokens = tokenize("if (1) 2; else 3;").peekable();
+        let tokens = tokenize("if (1) 2; else 3;");
         assert_eq!(
             parse(tokens),
             Node::Program {
@@ -489,7 +489,7 @@ mod tests {
 
     #[test]
     fn test_parse_while() {
-        let tokens = tokenize("while (1) 2;").peekable();
+        let tokens = tokenize("while (1) 2;");
         assert_eq!(
             parse(tokens),
             Node::Program {
