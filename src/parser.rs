@@ -29,6 +29,11 @@ pub enum Node {
     Return {
         value: Box<Node>,
     },
+    If {
+        condition: Box<Node>,
+        statement_true: Box<Node>,
+        statement_false: Option<Box<Node>>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -80,6 +85,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //
     // statement
     //   = "return" expression ";"
+    //   | "if" "(" expression ")" statement ("else" statement)?
     //   | expression ";"
     //
     // expression
@@ -126,6 +132,30 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 self.tokens.next(); // Consume ";".
                 Node::Return {
                     value: Box::new(expression),
+                }
+            },
+            Token::If => {
+                self.tokens.next(); // Consume "if".
+                self.tokens.next(); // Consume "(".
+                let condition = self.parse_expression();
+                self.tokens.next(); // Consume ")".
+                let statement = self.parse_statement();
+                match self.tokens.peek() {
+                    Some(Token::Else) => {
+                        self.tokens.next();
+                        Node::If {
+                            condition: Box::new(condition),
+                            statement_true: Box::new(statement),
+                            statement_false: Some(Box::new(self.parse_statement())),
+                        }
+                    },
+                    _ => {
+                        Node::If {
+                            condition: Box::new(condition),
+                            statement_true: Box::new(statement),
+                            statement_false: None,
+                        }
+                    }
                 }
             },
             _ => {
@@ -392,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn test_return() {
+    fn test_parse_return() {
         let tokens = tokenize("return 1;").peekable();
         assert_eq!(
             parse(tokens),
@@ -403,6 +433,37 @@ mod tests {
                             Node::Integer {
                                 value: 1,
                             }
+                        ),
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_if() {
+        let tokens = tokenize("if (1) 2; else 3;").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::If {
+                        condition: Box::new(
+                            Node::Integer {
+                                value: 1,
+                            }
+                        ),
+                        statement_true: Box::new(
+                            Node::Integer {
+                                value: 2,
+                            }
+                        ),
+                        statement_false: Some(
+                            Box::new(
+                                Node::Integer {
+                                    value: 3,
+                                }
+                            )
                         ),
                     },
                 ],

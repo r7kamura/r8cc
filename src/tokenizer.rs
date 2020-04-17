@@ -4,6 +4,12 @@ pub enum Token {
     Plus,
     Minus,
     Equal,
+    BraceLeft,
+    BraceRight,
+    ParenthesisLeft,
+    ParenthesisRight,
+    If,
+    Else,
     Return,
     Integer {
         value: u32,
@@ -90,56 +96,82 @@ impl Iterator for Tokens<'_> {
             match character {
                 '+' => {
                     self.chars.next();
-                    return Some(Token::Plus);
+                    Some(Token::Plus)
                 },
                 '-' => {
                     self.chars.next();
-                    return Some(Token::Minus);
+                    Some(Token::Minus)
                 },
                 '=' => {
                     self.chars.next();
-                    return Some(Token::Equal);
+                    Some(Token::Equal)
                 },
                 '"' => {
-                    return Some(
+                    Some(
                         Token::String {
                             value: self.consume_string_literal(),
                         }
-                    );
+                    )
                 },
                 '\'' => {
-                    return Some(
+                    Some(
                         Token::Character {
                             value: self.consume_character_literal(),
                         }
-                    );
+                    )
                 },
+                '(' => {
+                    self.chars.next();
+                    Some(Token::ParenthesisLeft)
+                },
+                ')' => {
+                    self.chars.next();
+                    Some(Token::ParenthesisRight)
+                },
+                '{' => {
+                    self.chars.next();
+                    Some(Token::BraceLeft)
+                },
+                '}' => {
+                    self.chars.next();
+                    Some(Token::BraceRight)
+                }
                 _ => {
                     if character.is_ascii_digit() {
-                        return Some(
+                        Some(
                             Token::Integer {
                                 value: self.consume_number_literal(),
                             }
-                        );
+                        )
                     } else if character.is_ascii_alphabetic() {
                         let name = self.consume_identifier();
-                        if name == "return" {
-                            return Some(Token::Return);
-                        } else {
-                            return Some(
-                                Token::Identifier {
-                                    name,
-                                }
-                            );
+                        match &*name {
+                            "if" => {
+                                Some(Token::If)
+                            },
+                            "else" => {
+                                Some(Token::Else)
+                            },
+                            "return" => {
+                                Some(Token::Return)
+                            },
+                            _ => {
+                                Some(
+                                    Token::Identifier {
+                                        name,
+                                    }
+                                )
+                            },
                         }
                     } else {
                         self.chars.next();
-                        return Some(Token::Unknown);
+                        Some(Token::Unknown)
                     }
                 },
             }
+        } else {
+            None
         }
-        None
     }
 }
 
@@ -230,6 +262,27 @@ mod tests {
                 Token::Identifier { name: "a".to_string() },
                 Token::Equal,
                 Token::Integer { value: 1 },
+            ]
+        )
+    }
+
+    #[test]
+    fn test_if() {
+        let tokens: Vec<Token> = tokenize("if (1) { 2 } else { 3 }").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::If,
+                Token::ParenthesisLeft,
+                Token::Integer { value: 1 },
+                Token::ParenthesisRight,
+                Token::BraceLeft,
+                Token::Integer { value: 2 },
+                Token::BraceRight,
+                Token::Else,
+                Token::BraceLeft,
+                Token::Integer { value: 3 },
+                Token::BraceRight,
             ]
         )
     }
