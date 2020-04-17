@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::iter::Peekable;
 
-use crate::tokenizer::Token;
+use crate::tokenizer::{Token, TokenKind};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Node {
@@ -131,7 +131,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn parse_statement(&mut self) -> Node {
         let token = self.tokens.peek().unwrap();
         match token {
-            Token::Return => {
+            Token { kind: TokenKind::Return, .. } => {
                 self.tokens.next();
                 let expression = self.parse_expression();
                 self.tokens.next(); // Consume ";".
@@ -139,14 +139,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     value: Box::new(expression),
                 }
             },
-            Token::If => {
+            Token { kind: TokenKind::If, .. } => {
                 self.tokens.next(); // Consume "if".
                 self.tokens.next(); // Consume "(".
                 let condition = self.parse_expression();
                 self.tokens.next(); // Consume ")".
                 let statement = self.parse_statement();
                 match self.tokens.peek() {
-                    Some(Token::Else) => {
+                    Some(Token { kind: TokenKind::Else, .. }) => {
                         self.tokens.next();
                         Node::If {
                             condition: Box::new(condition),
@@ -163,7 +163,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     }
                 }
             },
-            Token::While => {
+            Token { kind: TokenKind::While, .. } => {
                 self.tokens.next(); // Consume "while".
                 self.tokens.next(); // Consume "(".
                 let condition = self.parse_expression();
@@ -190,7 +190,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.parse_add();
         if let Some(token) = self.tokens.peek() {
             match token {
-                Token::Equal => {
+                Token { kind: TokenKind::Equal, .. } => {
                     self.tokens.next();
                     node = Node::Assign {
                         left: Box::new(node),
@@ -207,7 +207,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut node = self.parse_multiply();
         while let Some(token) = self.tokens.peek() {
             match token {
-                Token::Plus => {
+                Token { kind: TokenKind::Plus, .. } => {
                     self.tokens.next();
                     let right = self.parse_multiply();
                     node = Node::Add {
@@ -215,7 +215,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                         right: Box::new(right),
                     };
                 },
-                Token::Minus => {
+                Token { kind: TokenKind::Minus, .. } => {
                     self.tokens.next();
                     let right = self.parse_multiply();
                     node = Node::Subtract {
@@ -242,10 +242,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn parse_primary(&mut self) -> Node {
         let token = self.tokens.next().expect("Expect token.");
         match token {
-            Token::Integer { value } => {
+            Token { kind: TokenKind::Integer(value), .. } => {
                 Node::Integer { value }
             },
-            Token::Identifier { name } => {
+            Token { kind: TokenKind::Identifier(name), .. } => {
                 Node::LocalVariable {
                     local_variable: self.environment.find_local_variable_by(&name).
                         unwrap_or_else(|| self.environment.add_local_variable(name))

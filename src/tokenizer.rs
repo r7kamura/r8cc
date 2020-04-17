@@ -1,6 +1,12 @@
+use std::iter::Peekable;
+use std::str::Chars;
+
+pub fn tokenize(input: &str) -> Tokens {
+    Tokens::new(input.chars().peekable())
+}
+
 #[derive(Debug, PartialEq, Eq)]
-pub enum Token {
-    Unknown,
+pub enum TokenKind {
     Semicolon,
     Plus,
     Minus,
@@ -13,30 +19,71 @@ pub enum Token {
     Else,
     While,
     Return,
-    Integer {
-        value: u32,
-    },
-    String {
-        value: String,
-    },
-    Character {
-        value: char,
-    },
-    Identifier {
-        name: String,
-    },
+    Integer(u32),
+    String(String),
+    Character(char),
+    Identifier(String),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Position {
+    pub column: usize,
+    pub line: usize,
+}
+
+impl Position {
+    fn new(column: usize, line: usize) -> Self {
+        Self {
+            column,
+            line,
+        }
+    }
+}
+
+impl Default for Position {
+    fn default() -> Position {
+        Position::new(1, 1)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub position: Position,
+}
+
+impl Token {
+    fn new(kind: TokenKind, position: Position) -> Self {
+        Self {
+            kind,
+            position,
+        }
+    }
 }
 
 pub struct Tokens<'a> {
-    chars: std::iter::Peekable<std::str::Chars<'a>>,
+    chars: Peekable<Chars<'a>>,
+    position: Position,
 }
 
-impl Tokens<'_> {
+impl<'a> Tokens<'a> {
+    fn new(chars: Peekable<Chars<'a>>) -> Self {
+        Self {
+            chars,
+            position: Position::default(),
+        }
+    }
+
+    fn next_char(&mut self) -> Option<char> {
+        self.position.column += 1;
+        self.chars.next()
+    }
+
     fn consume_number_literal(&mut self) -> u32 {
         let mut number = 0;
         while let Some(&character) = self.chars.peek() {
             if character.is_ascii_digit() {
-                self.chars.next();
+                self.next_char();
                 number = number * 10 + character.to_digit(10).unwrap();
             } else {
                 break;
@@ -46,16 +93,16 @@ impl Tokens<'_> {
     }
 
     fn consume_character_literal(&mut self) -> char {
-        self.chars.next();
-        let character = self.chars.next();
-        self.chars.next();
+        self.next_char();
+        let character = self.next_char();
+        self.next_char();
         character.unwrap()
     }
 
     fn consume_string_literal(&mut self) -> String {
         let mut string = String::new();
-        self.chars.next();
-        while let Some(character) = self.chars.next() {
+        self.next_char();
+        while let Some(character) = self.next_char() {
             if character == '"' {
                 break;
             } else {
@@ -70,7 +117,7 @@ impl Tokens<'_> {
         while let Some(&character) = self.chars.peek() {
             if character.is_ascii_alphanumeric() {
                 string.push(character);
-                self.chars.next();
+                self.next_char();
             } else {
                 break;
             }
@@ -81,7 +128,7 @@ impl Tokens<'_> {
     fn skip_whitespaces(&mut self) {
         while let Some(&character) = self.chars.peek() {
             if character.is_whitespace() {
-                self.chars.next();
+                self.next_char();
             } else {
                 break;
             }
@@ -94,105 +141,83 @@ impl Iterator for Tokens<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.skip_whitespaces();
+        let mut token = None;
         if let Some(&character) = self.chars.peek() {
+            let position = self.position.clone();
             match character {
                 ';' => {
-                    self.chars.next();
-                    Some(Token::Semicolon)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::Semicolon, position));
                 },
                 '+' => {
-                    self.chars.next();
-                    Some(Token::Plus)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::Plus, position));
                 },
                 '-' => {
-                    self.chars.next();
-                    Some(Token::Minus)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::Minus, position));
                 },
                 '=' => {
-                    self.chars.next();
-                    Some(Token::Equal)
-                },
-                '"' => {
-                    Some(
-                        Token::String {
-                            value: self.consume_string_literal(),
-                        }
-                    )
-                },
-                '\'' => {
-                    Some(
-                        Token::Character {
-                            value: self.consume_character_literal(),
-                        }
-                    )
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::Equal, position));
                 },
                 '(' => {
-                    self.chars.next();
-                    Some(Token::ParenthesisLeft)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::ParenthesisLeft, position));
                 },
                 ')' => {
-                    self.chars.next();
-                    Some(Token::ParenthesisRight)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::ParenthesisRight, position));
                 },
                 '{' => {
-                    self.chars.next();
-                    Some(Token::BraceLeft)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::BraceLeft, position));
                 },
                 '}' => {
-                    self.chars.next();
-                    Some(Token::BraceRight)
+                    self.next_char();
+                    token = Some(Token::new(TokenKind::BraceRight, position));
                 }
+                '"' => {
+                    let value = self.consume_string_literal();
+                    token = Some(Token::new(TokenKind::String(value), position));
+                },
+                '\'' => {
+                    let value = self.consume_character_literal();
+                    token = Some(Token::new(TokenKind::Character(value), position));
+                },
                 _ => {
                     if character.is_ascii_digit() {
-                        Some(
-                            Token::Integer {
-                                value: self.consume_number_literal(),
-                            }
-                        )
+                        token = Some(Token::new(TokenKind::Integer(self.consume_number_literal()), position));
                     } else if character.is_ascii_alphabetic() {
                         let name = self.consume_identifier();
                         match &*name {
                             "if" => {
-                                Some(Token::If)
+                                token = Some(Token::new(TokenKind::If, position));
                             },
                             "else" => {
-                                Some(Token::Else)
+                                token = Some(Token::new(TokenKind::Else, position));
                             },
                             "return" => {
-                                Some(Token::Return)
+                                token = Some(Token::new(TokenKind::Return, position));
                             },
                             "while" => {
-                                Some(Token::While)
+                                token = Some(Token::new(TokenKind::While, position));
                             },
                             _ => {
-                                Some(
-                                    Token::Identifier {
-                                        name,
-                                    }
-                                )
+                                token = Some(Token::new(TokenKind::Identifier(name), position));
                             },
                         }
-                    } else {
-                        self.chars.next();
-                        Some(Token::Unknown)
                     }
                 },
             }
-        } else {
-            None
         }
-    }
-}
-
-pub fn tokenize(input: &str) -> Tokens {
-    Tokens {
-        chars: input.chars().peekable(),
+        token
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Token, tokenize};
+    use super::{Position, Token, TokenKind, tokenize};
 
     #[test]
     fn test_tokenize_empty_string() {
@@ -218,24 +243,26 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Integer { value: 1 },
-                Token::Plus,
-                Token::Integer { value: 2 },
-                Token::Minus,
-                Token::Integer { value: 3 },
-            ]
-        );
-    }
-
-    #[test]
-    fn test_tokenize_unknown_token() {
-        let tokens: Vec<Token> = tokenize("1 + あ").collect();
-        assert_eq!(
-            tokens,
-            vec![
-                Token::Integer { value: 1 },
-                Token::Plus,
-                Token::Unknown,
+                Token::new(
+                    TokenKind::Integer(1),
+                    Position::new(1, 1)
+                ),
+                Token::new(
+                    TokenKind::Plus,
+                    Position::new(3, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(2),
+                    Position::new(5, 1)
+                ),
+                Token::new(
+                    TokenKind::Minus,
+                    Position::new(7, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(3),
+                    Position::new(9, 1)
+                ),
             ]
         );
     }
@@ -246,7 +273,10 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::String { value: "dummy".to_string() },
+                Token::new(
+                    TokenKind::String("dummy".to_string()),
+                    Position::new(1, 1)
+                ),
             ]
         );
     }
@@ -257,7 +287,10 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Character { value: 'a' },
+                Token::new(
+                    TokenKind::Character('a'),
+                    Position::new(1, 1)
+                ),
             ]
         );
     }
@@ -268,9 +301,18 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Identifier { name: "a".to_string() },
-                Token::Equal,
-                Token::Integer { value: 1 },
+                Token::new(
+                    TokenKind::Identifier("a".to_string()),
+                    Position::new(1, 1)
+                ),
+                Token::new(
+                    TokenKind::Equal,
+                    Position::new(3, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(1),
+                    Position::new(5, 1)
+                ),
             ]
         )
     }
@@ -281,17 +323,50 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::If,
-                Token::ParenthesisLeft,
-                Token::Integer { value: 1 },
-                Token::ParenthesisRight,
-                Token::BraceLeft,
-                Token::Integer { value: 2 },
-                Token::BraceRight,
-                Token::Else,
-                Token::BraceLeft,
-                Token::Integer { value: 3 },
-                Token::BraceRight,
+                Token::new(
+                    TokenKind::If,
+                    Position::new(1, 1)
+                ),
+                Token::new(
+                    TokenKind::ParenthesisLeft,
+                    Position::new(4, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(1),
+                    Position::new(5, 1)
+                ),
+                Token::new(
+                    TokenKind::ParenthesisRight,
+                    Position::new(6, 1)
+                ),
+                Token::new(
+                    TokenKind::BraceLeft,
+                    Position::new(8, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(2),
+                    Position::new(10, 1)
+                ),
+                Token::new(
+                    TokenKind::BraceRight,
+                    Position::new(12, 1)
+                ),
+                Token::new(
+                    TokenKind::Else,
+                    Position::new(14, 1)
+                ),
+                Token::new(
+                    TokenKind::BraceLeft,
+                    Position::new(19, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(3),
+                    Position::new(21, 1)
+                ),
+                Token::new(
+                    TokenKind::BraceRight,
+                    Position::new(23, 1)
+                ),
             ]
         )
     }
@@ -302,13 +377,34 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::While,
-                Token::ParenthesisLeft,
-                Token::Integer { value: 1 },
-                Token::ParenthesisRight,
-                Token::Return,
-                Token::Integer { value: 2 },
-                Token::Semicolon,
+                Token::new(
+                    TokenKind::While,
+                    Position::new(1, 1)
+                ),
+                Token::new(
+                    TokenKind::ParenthesisLeft,
+                    Position::new(7, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(1),
+                    Position::new(8, 1)
+                ),
+                Token::new(
+                    TokenKind::ParenthesisRight,
+                    Position::new(9, 1)
+                ),
+                Token::new(
+                    TokenKind::Return,
+                    Position::new(11, 1)
+                ),
+                Token::new(
+                    TokenKind::Integer(2),
+                    Position::new(18, 1)
+                ),
+                Token::new(
+                    TokenKind::Semicolon,
+                    Position::new(19, 1)
+                ),
             ]
         )
     }
