@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::iter::Peekable;
 
-use crate::tokenizer::{Token, Tokens};
+use crate::tokenizer::Token;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Node {
@@ -31,11 +31,6 @@ pub enum Node {
     },
 }
 
-pub fn parse(tokens: Peekable<Tokens>) -> Node {
-    let mut parser = Parser::new(tokens);
-    parser.parse()
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LocalVariable {
     pub name: String,
@@ -63,22 +58,23 @@ impl Environment {
     }
 }
 
-struct Parser<'a> {
-    environment: Environment,
-    tokens: Peekable<Tokens<'a>>,
+pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> Node {
+    let mut parser = Parser {
+        tokens: tokens.peekable(),
+        environment: Environment {
+            local_variables: HashMap::new(),
+            offset: 0,
+        }
+    };
+    parser.parse()
 }
 
-impl<'a> Parser<'a> {
-    fn new(tokens: Peekable<Tokens<'a>>) -> Self {
-        Self {
-            tokens,
-            environment: Environment {
-                local_variables: HashMap::new(),
-                offset: 0,
-            }
-        }
-    }
+struct Parser<T: Iterator<Item = Token>> {
+    environment: Environment,
+    tokens: Peekable<T>,
+}
 
+impl<T: Iterator<Item = Token>> Parser<T> {
     // program
     //   = statement*
     //

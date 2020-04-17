@@ -18,7 +18,7 @@ fn main() {
     }
 
     let input = args.nth(1).unwrap();
-    let tokens = tokenize(&input).peekable();
+    let tokens = tokenize(&input);
     let node = parse(tokens);
     generate(node);
 }
