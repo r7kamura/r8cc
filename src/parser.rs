@@ -34,6 +34,10 @@ pub enum Node {
         statement_true: Box<Node>,
         statement_false: Option<Box<Node>>,
     },
+    While {
+        condition: Box<Node>,
+        statement: Box<Node>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -86,6 +90,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     // statement
     //   = "return" expression ";"
     //   | "if" "(" expression ")" statement ("else" statement)?
+    //   | "while" "(" expression ")" statement
     //   | expression ";"
     //
     // expression
@@ -156,6 +161,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                             statement_false: None,
                         }
                     }
+                }
+            },
+            Token::While => {
+                self.tokens.next(); // Consume "while".
+                self.tokens.next(); // Consume "(".
+                let condition = self.parse_expression();
+                self.tokens.next(); // Consume ")".
+                let statement = self.parse_statement();
+                Node::While {
+                    condition: Box::new(condition),
+                    statement: Box::new(statement),
                 }
             },
             _ => {
@@ -464,6 +480,30 @@ mod tests {
                                     value: 3,
                                 }
                             )
+                        ),
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_while() {
+        let tokens = tokenize("while (1) 2;").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::While {
+                        condition: Box::new(
+                            Node::Integer {
+                                value: 1,
+                            }
+                        ),
+                        statement: Box::new(
+                            Node::Integer {
+                                value: 2,
+                            }
                         ),
                     },
                 ],

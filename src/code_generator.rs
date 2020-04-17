@@ -81,6 +81,17 @@ impl CodeGenerator {
                     println!(".Lend{}:", self.labels_count);
                 }
             },
+            Node::While { condition, statement } => {
+                self.labels_count += 1;
+                println!(".Lbegin{}:", self.labels_count);
+                self.process(*condition);
+                println!("  pop rax");
+                println!("  cmp rax, 0");
+                println!("  je .Lend{}", self.labels_count);
+                self.process(*statement);
+                println!("  jmp .Lbegin{}", self.labels_count);
+                println!(".Lend{}:", self.labels_count);
+            },
         }
     }
 

@@ -1,6 +1,7 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     Unknown,
+    Semicolon,
     Plus,
     Minus,
     Equal,
@@ -10,6 +11,7 @@ pub enum Token {
     ParenthesisRight,
     If,
     Else,
+    While,
     Return,
     Integer {
         value: u32,
@@ -94,6 +96,10 @@ impl Iterator for Tokens<'_> {
         self.skip_whitespaces();
         if let Some(&character) = self.chars.peek() {
             match character {
+                ';' => {
+                    self.chars.next();
+                    Some(Token::Semicolon)
+                },
                 '+' => {
                     self.chars.next();
                     Some(Token::Plus)
@@ -154,6 +160,9 @@ impl Iterator for Tokens<'_> {
                             },
                             "return" => {
                                 Some(Token::Return)
+                            },
+                            "while" => {
+                                Some(Token::While)
                             },
                             _ => {
                                 Some(
@@ -283,6 +292,23 @@ mod tests {
                 Token::BraceLeft,
                 Token::Integer { value: 3 },
                 Token::BraceRight,
+            ]
+        )
+    }
+
+    #[test]
+    fn test_while() {
+        let tokens: Vec<Token> = tokenize("while (1) return 2;").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::While,
+                Token::ParenthesisLeft,
+                Token::Integer { value: 1 },
+                Token::ParenthesisRight,
+                Token::Return,
+                Token::Integer { value: 2 },
+                Token::Semicolon,
             ]
         )
     }
