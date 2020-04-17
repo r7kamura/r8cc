@@ -4,6 +4,7 @@ pub enum Token {
     Plus,
     Minus,
     Equal,
+    Return,
     Integer {
         value: u32,
     },
@@ -121,11 +122,16 @@ impl Iterator for Tokens<'_> {
                             }
                         );
                     } else if character.is_ascii_alphabetic() {
-                        return Some(
-                            Token::Identifier {
-                                name: self.consume_identifier(),
-                            }
-                        );
+                        let name = self.consume_identifier();
+                        if name == "return" {
+                            return Some(Token::Return);
+                        } else {
+                            return Some(
+                                Token::Identifier {
+                                    name,
+                                }
+                            );
+                        }
                     } else {
                         self.chars.next();
                         return Some(Token::Unknown);

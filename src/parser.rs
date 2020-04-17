@@ -26,6 +26,9 @@ pub enum Node {
     LocalVariable {
         local_variable: LocalVariable,
     },
+    Return {
+        value: Box<Node>,
+    },
 }
 
 pub fn parse(tokens: Peekable<Tokens>) -> Node {
@@ -76,16 +79,38 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // program = statement*
-    // statement = expression ";"
-    // expression = assign
-    // assign = equality ("=" assign)?
-    // equality = relational ("==" relational | "!=" relational)*
-    // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-    // add = multiply ("+" multiply | "-" multiply)*
-    // multiply = unary ("*" unary | "/" unary)*
-    // unary = ("+" | "-")? primary
-    // primary = number | identifier | "(" expression ")"
+    // program
+    //   = statement*
+    //
+    // statement
+    //   = "return" expression ";"
+    //   | expression ";"
+    //
+    // expression
+    //   = assign
+    //
+    // assign
+    //   = equality ("=" assign)?
+    //
+    // equality
+    //   = relational ("==" relational | "!=" relational)*
+    //
+    // relational
+    //   = add ("<" add | "<=" add | ">" add | ">=" add)*
+    //
+    // add
+    //   = multiply ("+" multiply | "-" multiply)*
+    //
+    // multiply
+    //   = unary ("*" unary | "/" unary)*
+    //
+    // unary
+    //   = ("+" | "-")? primary
+    //
+    // primary
+    //   = number
+    //   | identifier
+    //   | "(" expression ")"
     fn parse(&mut self) -> Node {
         let mut statements = Vec::new();
         while self.tokens.peek().is_some() {
@@ -97,9 +122,22 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> Node {
-        let node = self.parse_expression();
-        self.tokens.next();
-        node
+        let token = self.tokens.peek().unwrap();
+        match token {
+            Token::Return => {
+                self.tokens.next();
+                let expression = self.parse_expression();
+                self.tokens.next(); // Consume ";".
+                Node::Return {
+                    value: Box::new(expression),
+                }
+            },
+            _ => {
+                let expression = self.parse_expression();
+                self.tokens.next(); // Consume ";".
+                expression
+            }
+        }
     }
 
     fn parse_expression(&mut self) -> Node {
@@ -351,6 +389,25 @@ mod tests {
                             name: "a".to_string(),
                             offset: 8,
                         },
+                    },
+                ],
+            }
+        );
+    }
+
+    #[test]
+    fn test_return() {
+        let tokens = tokenize("return 1;").peekable();
+        assert_eq!(
+            parse(tokens),
+            Node::Program {
+                statements: vec![
+                    Node::Return {
+                        value: Box::new(
+                            Node::Integer {
+                                value: 1,
+                            }
+                        ),
                     },
                 ],
             }

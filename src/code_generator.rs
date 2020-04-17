@@ -5,10 +5,7 @@ pub fn generate(node: Node) {
     println!(".global main");
     println!("main:");
     process(node);
-    println!("  pop rax");
-    println!("  mov rsp, rbp");
-    println!("  pop rbp");
-    println!("  ret");
+    return_();
 }
 
 fn process(node: Node) {
@@ -48,7 +45,11 @@ fn process(node: Node) {
         Node::LocalVariable { .. } => {
             process_address_of(node);
             load();
-        }
+        },
+        Node::Return { value } => {
+            process(*value);
+            return_();
+        },
     }
 }
 
@@ -71,4 +72,11 @@ fn store() {
     println!("  pop rax");
     println!("  mov [rax], rdi");
     println!("  push rdi");
+}
+
+fn return_() {
+    println!("  pop rax");
+    println!("  mov rsp, rbp");
+    println!("  pop rbp");
+    println!("  ret");
 }
