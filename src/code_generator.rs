@@ -99,6 +99,30 @@ impl CodeGenerator {
                 println!("  jmp .Lbegin{}", self.labels_count);
                 println!(".Lend{}:", self.labels_count);
             }
+            Node::For {
+                initialization,
+                condition,
+                afterthrough,
+                statement,
+            } => {
+                self.labels_count += 1;
+                if initialization.is_some() {
+                    self.process(*initialization.unwrap());
+                }
+                println!(".Lbegin{}:", self.labels_count);
+                if condition.is_some() {
+                    self.process(*condition.unwrap());
+                    println!("  pop rax");
+                    println!("  cmp rax, 0");
+                    println!("  je .Lend{}", self.labels_count);
+                }
+                self.process(*statement);
+                if afterthrough.is_some() {
+                    self.process(*afterthrough.unwrap());
+                }
+                println!("  jmp .Lbegin{}", self.labels_count);
+                println!(".Lend{}:", self.labels_count);
+            }
         }
     }
 

@@ -18,6 +18,7 @@ pub enum TokenKind {
     If,
     Else,
     While,
+    For,
     Return,
     Integer(u32),
     String(String),
@@ -204,6 +205,9 @@ impl Iterator for Tokens<'_> {
                             "while" => {
                                 token = Some(Token::new(TokenKind::While, position));
                             }
+                            "for" => {
+                                token = Some(Token::new(TokenKind::For, position));
+                            }
                             _ => {
                                 token = Some(Token::new(TokenKind::Identifier(name), position));
                             }
@@ -329,5 +333,31 @@ mod tests {
                 Token::new(TokenKind::Semicolon, Position::new(1, 2)),
             ]
         );
+    }
+
+    #[test]
+    fn test_tokenize_for() {
+        let tokens: Vec<Token> = tokenize("for (i = 10; i; i = i - 1) 2;").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(TokenKind::For, Position::new(1, 1)),
+                Token::new(TokenKind::ParenthesisLeft, Position::new(5, 1)),
+                Token::new(TokenKind::Identifier("i".to_string()), Position::new(6, 1)),
+                Token::new(TokenKind::Equal, Position::new(8, 1)),
+                Token::new(TokenKind::Integer(10), Position::new(10, 1)),
+                Token::new(TokenKind::Semicolon, Position::new(12, 1)),
+                Token::new(TokenKind::Identifier("i".to_string()), Position::new(14, 1)),
+                Token::new(TokenKind::Semicolon, Position::new(15, 1)),
+                Token::new(TokenKind::Identifier("i".to_string()), Position::new(17, 1)),
+                Token::new(TokenKind::Equal, Position::new(19, 1)),
+                Token::new(TokenKind::Identifier("i".to_string()), Position::new(21, 1)),
+                Token::new(TokenKind::Minus, Position::new(23, 1)),
+                Token::new(TokenKind::Integer(1), Position::new(25, 1)),
+                Token::new(TokenKind::ParenthesisRight, Position::new(26, 1)),
+                Token::new(TokenKind::Integer(2), Position::new(28, 1)),
+                Token::new(TokenKind::Semicolon, Position::new(29, 1)),
+            ]
+        )
     }
 }
