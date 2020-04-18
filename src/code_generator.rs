@@ -123,6 +123,11 @@ impl CodeGenerator {
                 println!("  jmp .Lbegin{}", self.labels_count);
                 println!(".Lend{}:", self.labels_count);
             }
+            Node::Block { statements } => {
+                for statement in statements {
+                    self.process(statement);
+                }
+            }
         }
     }
 

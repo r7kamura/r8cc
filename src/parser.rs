@@ -44,6 +44,9 @@ pub enum Node {
         afterthrough: Option<Box<Node>>,
         statement: Box<Node>,
     },
+    Block {
+        statements: Vec<Node>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -108,6 +111,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   | "if" "(" expression ")" statement ("else" statement)?
     //   | "while" "(" expression ")" statement
     //   | "for" "(" expression? ";" expression? ";" expression? ")" statement
+    //   | "{" statements* "}"
     //   | expression ";"
     //
     // expression
@@ -149,8 +153,19 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             TokenKind::If => self.parse_statement_if(),
             TokenKind::Return => self.parse_statement_return(),
             TokenKind::While => self.parse_statement_while(),
+            TokenKind::BraceLeft => self.parse_statement_block(),
             _ => self.parse_statement_expression(),
         }
+    }
+
+    fn parse_statement_block(&mut self) -> ParseResult {
+        let mut statements = Vec::new();
+        self.consume_token(TokenKind::BraceLeft)?;
+        while !self.has_next_token(TokenKind::BraceRight) {
+            statements.push(self.parse_statement()?);
+        }
+        self.consume_token(TokenKind::BraceRight)?;
+        Ok(Node::Block { statements })
     }
 
     fn parse_statement_for(&mut self) -> ParseResult {
@@ -518,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_parse_for() {
-        let tokens = tokenize("for (;;) 1;");
+        let tokens = tokenize("for (;;) { 1; 2; }");
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
@@ -526,8 +541,10 @@ mod tests {
                     initialization: None,
                     condition: None,
                     afterthrough: None,
-                    statement: Box::new(Node::Integer { value: 1 }),
-                },],
+                    statement: Box::new(Node::Block {
+                        statements: vec![Node::Integer { value: 1 }, Node::Integer { value: 2 }],
+                    }),
+                }],
             })
         );
     }
