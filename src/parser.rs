@@ -68,7 +68,18 @@ impl Environment {
     }
 }
 
-pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> Node {
+#[derive(Debug, PartialEq, Eq)]
+pub enum ParseError {
+    MissingToken(TokenKind),
+    UnexpectedToken {
+        expected: Option<TokenKind>, // Use this hint field whenever there is one expected TokenKind.
+        actual: Token,
+    },
+}
+
+type ParseResult = Result<Node, ParseError>;
+
+pub fn parse<T: Iterator<Item = Token>>(tokens: T)-> ParseResult {
     let mut parser = Parser {
         tokens: tokens.peekable(),
         environment: Environment::default(),
@@ -116,98 +127,115 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   = number
     //   | identifier
     //   | "(" expression ")"
-    fn parse(&mut self) -> Node {
+    fn parse(&mut self)-> ParseResult {
         let mut statements = Vec::new();
-        while self.tokens.peek().is_some() {
-            statements.push(self.parse_statement());
+        while self.has_next_token() {
+            statements.push(self.parse_statement()?);
         }
-        Node::Program {
-            statements,
+        Ok(
+            Node::Program {
+                statements,
+            }
+        )
+    }
+
+    fn parse_statement(&mut self)-> ParseResult {
+        match self.tokens.peek().unwrap().kind {
+            TokenKind::If => self.parse_statement_if(),
+            TokenKind::Return => self.parse_statement_return(),
+            TokenKind::While => self.parse_statement_while(),
+            _ => self.parse_statement_expression(),
         }
     }
 
-    fn parse_statement(&mut self) -> Node {
-        let token = self.tokens.peek().unwrap();
-        match token {
-            Token { kind: TokenKind::Return, .. } => {
-                self.tokens.next();
-                let expression = self.parse_expression();
-                self.tokens.next(); // Consume ";".
-                Node::Return {
-                    value: Box::new(expression),
-                }
-            },
-            Token { kind: TokenKind::If, .. } => {
-                self.tokens.next(); // Consume "if".
-                self.tokens.next(); // Consume "(".
-                let condition = self.parse_expression();
-                self.tokens.next(); // Consume ")".
-                let statement = self.parse_statement();
-                match self.tokens.peek() {
-                    Some(Token { kind: TokenKind::Else, .. }) => {
-                        self.tokens.next();
-                        Node::If {
-                            condition: Box::new(condition),
-                            statement_true: Box::new(statement),
-                            statement_false: Some(Box::new(self.parse_statement())),
-                        }
-                    },
-                    _ => {
-                        Node::If {
-                            condition: Box::new(condition),
-                            statement_true: Box::new(statement),
-                            statement_false: None,
-                        }
+    fn parse_statement_return(&mut self) -> ParseResult {
+        self.consume_token(TokenKind::Return)?;
+        let expression = self.parse_expression()?;
+        self.consume_token(TokenKind::Semicolon)?;
+        Ok(
+            Node::Return {
+                value: Box::new(expression),
+            }
+        )
+    }
+
+    fn parse_statement_if(&mut self) -> ParseResult {
+        self.consume_token(TokenKind::If)?;
+        self.consume_token(TokenKind::ParenthesisLeft)?;
+        let condition = self.parse_expression()?;
+        self.consume_token(TokenKind::ParenthesisRight)?;
+        let statement = self.parse_statement()?;
+        match self.tokens.peek() {
+            Some(Token { kind: TokenKind::Else, .. }) => {
+                self.consume_token(TokenKind::Else)?;
+                Ok(
+                    Node::If {
+                        condition: Box::new(condition),
+                        statement_true: Box::new(statement),
+                        statement_false: Some(Box::new(self.parse_statement()?)),
                     }
-                }
-            },
-            Token { kind: TokenKind::While, .. } => {
-                self.tokens.next(); // Consume "while".
-                self.tokens.next(); // Consume "(".
-                let condition = self.parse_expression();
-                self.tokens.next(); // Consume ")".
-                let statement = self.parse_statement();
-                Node::While {
-                    condition: Box::new(condition),
-                    statement: Box::new(statement),
-                }
+                )
             },
             _ => {
-                let expression = self.parse_expression();
-                self.tokens.next(); // Consume ";".
-                expression
+                Ok(
+                    Node::If {
+                        condition: Box::new(condition),
+                        statement_true: Box::new(statement),
+                        statement_false: None,
+                    }
+                )
             }
         }
     }
 
-    fn parse_expression(&mut self) -> Node {
+    fn parse_statement_while(&mut self) -> ParseResult {
+        self.consume_token(TokenKind::While)?;
+        self.consume_token(TokenKind::ParenthesisLeft)?;
+        let condition = self.parse_expression()?;
+        self.consume_token(TokenKind::ParenthesisRight)?;
+        let statement = self.parse_statement()?;
+        Ok(
+            Node::While {
+                condition: Box::new(condition),
+                statement: Box::new(statement),
+            }
+        )
+    }
+
+    fn parse_statement_expression(&mut self) -> ParseResult {
+        let expression = self.parse_expression()?;
+        self.consume_token(TokenKind::Semicolon)?;
+        Ok(expression)
+    }
+
+    fn parse_expression(&mut self)-> ParseResult {
         self.parse_assign()
     }
 
-    fn parse_assign(&mut self) -> Node {
-        let mut node = self.parse_add();
+    fn parse_assign(&mut self)-> ParseResult {
+        let mut node = self.parse_add()?;
         if let Some(token) = self.tokens.peek() {
             match token {
                 Token { kind: TokenKind::Equal, .. } => {
                     self.tokens.next();
                     node = Node::Assign {
                         left: Box::new(node),
-                        right: Box::new(self.parse_assign()),
+                        right: Box::new(self.parse_assign()?),
                     };
                 },
                 _ => {},
             }
         }
-        node
+        Ok(node)
     }
 
-    fn parse_add(&mut self) -> Node {
-        let mut node = self.parse_multiply();
+    fn parse_add(&mut self)-> ParseResult {
+        let mut node = self.parse_multiply()?;
         while let Some(token) = self.tokens.peek() {
             match token {
                 Token { kind: TokenKind::Plus, .. } => {
                     self.tokens.next();
-                    let right = self.parse_multiply();
+                    let right = self.parse_multiply()?;
                     node = Node::Add {
                         left: Box::new(node),
                         right: Box::new(right),
@@ -215,7 +243,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 },
                 Token { kind: TokenKind::Minus, .. } => {
                     self.tokens.next();
-                    let right = self.parse_multiply();
+                    let right = self.parse_multiply()?;
                     node = Node::Subtract {
                         left: Box::new(node),
                         right: Box::new(right),
@@ -226,33 +254,49 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 },
             }
         }
-        node
+        Ok(node)
     }
 
-    fn parse_multiply(&mut self) -> Node {
+    fn parse_multiply(&mut self)-> ParseResult {
         self.parse_unary()
     }
 
-    fn parse_unary(&mut self) -> Node {
+    fn parse_unary(&mut self)-> ParseResult {
         self.parse_primary()
     }
 
-    fn parse_primary(&mut self) -> Node {
+    fn parse_primary(&mut self)-> ParseResult {
         let token = self.tokens.next().expect("Expect token.");
         match token {
             Token { kind: TokenKind::Integer(value), .. } => {
-                Node::Integer { value }
+                Ok(Node::Integer { value })
             },
             Token { kind: TokenKind::Identifier(name), .. } => {
-                Node::LocalVariable {
+                Ok(Node::LocalVariable {
                     local_variable: self.environment.find_local_variable_by(&name).
                         unwrap_or_else(|| self.environment.add_local_variable(name))
-                }
+                })
             },
             _ => {
-                panic!("Unexpected token: `{:?}`", token);
+                Err(ParseError::UnexpectedToken { expected: None, actual: token })
             }
         }
+    }
+
+    fn consume_token(&mut self, kind: TokenKind) -> Result<(), ParseError> {
+        if let Some(token) = self.tokens.next() {
+            if token.kind == kind {
+                Ok(())
+            } else {
+                Err(ParseError::UnexpectedToken { expected: Some(kind), actual: token })
+            }
+        } else {
+            Err(ParseError::MissingToken(kind))
+        }
+    }
+
+    fn has_next_token(&mut self) -> bool {
+        self.tokens.peek().is_some()
     }
 }
 
@@ -263,25 +307,25 @@ mod tests {
 
     #[test]
     fn test_parse_number() {
-        let tokens = tokenize("1");
+        let tokens = tokenize("1;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Integer {
                         value: 1,
                     },
                 ],
-            }
+            })
         )
     }
 
     #[test]
     fn test_parse_add() {
-        let tokens = tokenize("1 + 2");
+        let tokens = tokenize("1 + 2;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Add {
                         left: Box::new(
@@ -296,16 +340,16 @@ mod tests {
                         )
                     },
                 ],
-            }
+            })
         )
     }
 
     #[test]
     fn test_parse_subtract() {
-        let tokens = tokenize("1 - 2");
+        let tokens = tokenize("1 - 2;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Subtract {
                         left: Box::new(
@@ -320,16 +364,16 @@ mod tests {
                         )
                     },
                 ],
-            }
+            })
         )
     }
 
     #[test]
     fn test_parse_add_and_subtract() {
-        let tokens = tokenize("1 + 2 - 3");
+        let tokens = tokenize("1 + 2 - 3;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Subtract {
                         left: Box::new(
@@ -353,16 +397,16 @@ mod tests {
                         )
                     },
                 ],
-            }
+            })
         )
     }
 
     #[test]
     fn test_parse_local_variable() {
-        let tokens = tokenize("a");
+        let tokens = tokenize("a;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::LocalVariable {
                         local_variable: LocalVariable {
@@ -371,16 +415,16 @@ mod tests {
                         },
                     },
                 ],
-            }
+            })
         );
     }
 
     #[test]
     fn test_parse_assign() {
-        let tokens = tokenize("a = 1");
+        let tokens = tokenize("a = 1;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Assign {
                         left: Box::new(
@@ -398,16 +442,16 @@ mod tests {
                         )
                     },
                 ],
-            }
+            })
         );
     }
 
     #[test]
     fn test_parse_statements() {
-        let tokens = tokenize("a = 1; a");
+        let tokens = tokenize("a = 1; a;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Assign {
                         left: Box::new(
@@ -431,7 +475,7 @@ mod tests {
                         },
                     },
                 ],
-            }
+            })
         );
     }
 
@@ -440,7 +484,7 @@ mod tests {
         let tokens = tokenize("return 1;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::Return {
                         value: Box::new(
@@ -450,7 +494,7 @@ mod tests {
                         ),
                     },
                 ],
-            }
+            })
         );
     }
 
@@ -459,7 +503,7 @@ mod tests {
         let tokens = tokenize("if (1) 2; else 3;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::If {
                         condition: Box::new(
@@ -481,7 +525,7 @@ mod tests {
                         ),
                     },
                 ],
-            }
+            })
         );
     }
 
@@ -490,7 +534,7 @@ mod tests {
         let tokens = tokenize("while (1) 2;");
         assert_eq!(
             parse(tokens),
-            Node::Program {
+            Ok(Node::Program {
                 statements: vec![
                     Node::While {
                         condition: Box::new(
@@ -505,7 +549,7 @@ mod tests {
                         ),
                     },
                 ],
-            }
+            })
         );
     }
 }
