@@ -127,7 +127,11 @@ impl<'a> Tokens<'a> {
 
     fn skip_whitespaces(&mut self) {
         while let Some(&character) = self.chars.peek() {
-            if character.is_whitespace() {
+            if character == '\n' {
+                self.position.column = 1;
+                self.position.line += 1;
+                self.chars.next();
+            } else if character.is_whitespace() {
                 self.next_char();
             } else {
                 break;
@@ -318,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn test_if() {
+    fn test_tokenize_if() {
         let tokens: Vec<Token> = tokenize("if (1) { 2 } else { 3 }").collect();
         assert_eq!(
             tokens,
@@ -372,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn test_while() {
+    fn test_tokenize_while() {
         let tokens: Vec<Token> = tokenize("while (1) return 2;").collect();
         assert_eq!(
             tokens,
@@ -407,5 +411,23 @@ mod tests {
                 ),
             ]
         )
+    }
+
+    #[test]
+    fn test_tokenize_new_line() {
+        let tokens: Vec<Token> = tokenize("1\n;").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(
+                    TokenKind::Integer(1),
+                    Position::new(1, 1)
+                ),
+                Token::new(
+                    TokenKind::Semicolon,
+                    Position::new(1, 2)
+                ),
+            ]
+        );
     }
 }
