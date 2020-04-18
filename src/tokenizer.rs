@@ -33,10 +33,7 @@ pub struct Position {
 
 impl Position {
     fn new(column: usize, line: usize) -> Self {
-        Self {
-            column,
-            line,
-        }
+        Self { column, line }
     }
 }
 
@@ -54,10 +51,7 @@ pub struct Token {
 
 impl Token {
     fn new(kind: TokenKind, position: Position) -> Self {
-        Self {
-            kind,
-            position,
-        }
+        Self { kind, position }
     }
 }
 
@@ -152,31 +146,31 @@ impl Iterator for Tokens<'_> {
                 ';' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::Semicolon, position));
-                },
+                }
                 '+' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::Plus, position));
-                },
+                }
                 '-' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::Minus, position));
-                },
+                }
                 '=' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::Equal, position));
-                },
+                }
                 '(' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::ParenthesisLeft, position));
-                },
+                }
                 ')' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::ParenthesisRight, position));
-                },
+                }
                 '{' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::BraceLeft, position));
-                },
+                }
                 '}' => {
                     self.next_char();
                     token = Some(Token::new(TokenKind::BraceRight, position));
@@ -184,35 +178,38 @@ impl Iterator for Tokens<'_> {
                 '"' => {
                     let value = self.consume_string_literal();
                     token = Some(Token::new(TokenKind::String(value), position));
-                },
+                }
                 '\'' => {
                     let value = self.consume_character_literal();
                     token = Some(Token::new(TokenKind::Character(value), position));
-                },
+                }
                 _ => {
                     if character.is_ascii_digit() {
-                        token = Some(Token::new(TokenKind::Integer(self.consume_number_literal()), position));
+                        token = Some(Token::new(
+                            TokenKind::Integer(self.consume_number_literal()),
+                            position,
+                        ));
                     } else if character.is_ascii_alphabetic() {
                         let name = self.consume_identifier();
                         match &*name {
                             "if" => {
                                 token = Some(Token::new(TokenKind::If, position));
-                            },
+                            }
                             "else" => {
                                 token = Some(Token::new(TokenKind::Else, position));
-                            },
+                            }
                             "return" => {
                                 token = Some(Token::new(TokenKind::Return, position));
-                            },
+                            }
                             "while" => {
                                 token = Some(Token::new(TokenKind::While, position));
-                            },
+                            }
                             _ => {
                                 token = Some(Token::new(TokenKind::Identifier(name), position));
-                            },
+                            }
                         }
                     }
-                },
+                }
             }
         }
         token
@@ -221,24 +218,18 @@ impl Iterator for Tokens<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Position, Token, TokenKind, tokenize};
+    use super::{tokenize, Position, Token, TokenKind};
 
     #[test]
     fn test_tokenize_empty_string() {
         let tokens: Vec<Token> = tokenize("").collect();
-        assert_eq!(
-            tokens,
-            vec![]
-        );
+        assert_eq!(tokens, vec![]);
     }
 
     #[test]
     fn test_tokenize_whitespace() {
         let tokens: Vec<Token> = tokenize(" ").collect();
-        assert_eq!(
-            tokens,
-            vec![]
-        );
+        assert_eq!(tokens, vec![]);
     }
 
     #[test]
@@ -247,26 +238,11 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(
-                    TokenKind::Integer(1),
-                    Position::new(1, 1)
-                ),
-                Token::new(
-                    TokenKind::Plus,
-                    Position::new(3, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(2),
-                    Position::new(5, 1)
-                ),
-                Token::new(
-                    TokenKind::Minus,
-                    Position::new(7, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(3),
-                    Position::new(9, 1)
-                ),
+                Token::new(TokenKind::Integer(1), Position::new(1, 1)),
+                Token::new(TokenKind::Plus, Position::new(3, 1)),
+                Token::new(TokenKind::Integer(2), Position::new(5, 1)),
+                Token::new(TokenKind::Minus, Position::new(7, 1)),
+                Token::new(TokenKind::Integer(3), Position::new(9, 1)),
             ]
         );
     }
@@ -276,12 +252,10 @@ mod tests {
         let tokens: Vec<Token> = tokenize("\"dummy\"").collect();
         assert_eq!(
             tokens,
-            vec![
-                Token::new(
-                    TokenKind::String("dummy".to_string()),
-                    Position::new(1, 1)
-                ),
-            ]
+            vec![Token::new(
+                TokenKind::String("dummy".to_string()),
+                Position::new(1, 1)
+            ),]
         );
     }
 
@@ -290,12 +264,7 @@ mod tests {
         let tokens: Vec<Token> = tokenize("'a'").collect();
         assert_eq!(
             tokens,
-            vec![
-                Token::new(
-                    TokenKind::Character('a'),
-                    Position::new(1, 1)
-                ),
-            ]
+            vec![Token::new(TokenKind::Character('a'), Position::new(1, 1)),]
         );
     }
 
@@ -305,18 +274,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(
-                    TokenKind::Identifier("a".to_string()),
-                    Position::new(1, 1)
-                ),
-                Token::new(
-                    TokenKind::Equal,
-                    Position::new(3, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(1),
-                    Position::new(5, 1)
-                ),
+                Token::new(TokenKind::Identifier("a".to_string()), Position::new(1, 1)),
+                Token::new(TokenKind::Equal, Position::new(3, 1)),
+                Token::new(TokenKind::Integer(1), Position::new(5, 1)),
             ]
         )
     }
@@ -327,50 +287,17 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(
-                    TokenKind::If,
-                    Position::new(1, 1)
-                ),
-                Token::new(
-                    TokenKind::ParenthesisLeft,
-                    Position::new(4, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(1),
-                    Position::new(5, 1)
-                ),
-                Token::new(
-                    TokenKind::ParenthesisRight,
-                    Position::new(6, 1)
-                ),
-                Token::new(
-                    TokenKind::BraceLeft,
-                    Position::new(8, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(2),
-                    Position::new(10, 1)
-                ),
-                Token::new(
-                    TokenKind::BraceRight,
-                    Position::new(12, 1)
-                ),
-                Token::new(
-                    TokenKind::Else,
-                    Position::new(14, 1)
-                ),
-                Token::new(
-                    TokenKind::BraceLeft,
-                    Position::new(19, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(3),
-                    Position::new(21, 1)
-                ),
-                Token::new(
-                    TokenKind::BraceRight,
-                    Position::new(23, 1)
-                ),
+                Token::new(TokenKind::If, Position::new(1, 1)),
+                Token::new(TokenKind::ParenthesisLeft, Position::new(4, 1)),
+                Token::new(TokenKind::Integer(1), Position::new(5, 1)),
+                Token::new(TokenKind::ParenthesisRight, Position::new(6, 1)),
+                Token::new(TokenKind::BraceLeft, Position::new(8, 1)),
+                Token::new(TokenKind::Integer(2), Position::new(10, 1)),
+                Token::new(TokenKind::BraceRight, Position::new(12, 1)),
+                Token::new(TokenKind::Else, Position::new(14, 1)),
+                Token::new(TokenKind::BraceLeft, Position::new(19, 1)),
+                Token::new(TokenKind::Integer(3), Position::new(21, 1)),
+                Token::new(TokenKind::BraceRight, Position::new(23, 1)),
             ]
         )
     }
@@ -381,34 +308,13 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(
-                    TokenKind::While,
-                    Position::new(1, 1)
-                ),
-                Token::new(
-                    TokenKind::ParenthesisLeft,
-                    Position::new(7, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(1),
-                    Position::new(8, 1)
-                ),
-                Token::new(
-                    TokenKind::ParenthesisRight,
-                    Position::new(9, 1)
-                ),
-                Token::new(
-                    TokenKind::Return,
-                    Position::new(11, 1)
-                ),
-                Token::new(
-                    TokenKind::Integer(2),
-                    Position::new(18, 1)
-                ),
-                Token::new(
-                    TokenKind::Semicolon,
-                    Position::new(19, 1)
-                ),
+                Token::new(TokenKind::While, Position::new(1, 1)),
+                Token::new(TokenKind::ParenthesisLeft, Position::new(7, 1)),
+                Token::new(TokenKind::Integer(1), Position::new(8, 1)),
+                Token::new(TokenKind::ParenthesisRight, Position::new(9, 1)),
+                Token::new(TokenKind::Return, Position::new(11, 1)),
+                Token::new(TokenKind::Integer(2), Position::new(18, 1)),
+                Token::new(TokenKind::Semicolon, Position::new(19, 1)),
             ]
         )
     }
@@ -419,14 +325,8 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(
-                    TokenKind::Integer(1),
-                    Position::new(1, 1)
-                ),
-                Token::new(
-                    TokenKind::Semicolon,
-                    Position::new(1, 2)
-                ),
+                Token::new(TokenKind::Integer(1), Position::new(1, 1)),
+                Token::new(TokenKind::Semicolon, Position::new(1, 2)),
             ]
         );
     }

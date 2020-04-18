@@ -59,7 +59,8 @@ impl Environment {
             name: name.clone(),
             offset: self.offset,
         };
-        self.local_variables.insert(name.clone(), local_variable.clone());
+        self.local_variables
+            .insert(name.clone(), local_variable.clone());
         local_variable
     }
 
@@ -79,7 +80,7 @@ pub enum ParseError {
 
 type ParseResult = Result<Node, ParseError>;
 
-pub fn parse<T: Iterator<Item = Token>>(tokens: T)-> ParseResult {
+pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> ParseResult {
     let mut parser = Parser {
         tokens: tokens.peekable(),
         environment: Environment::default(),
@@ -127,19 +128,15 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   = number
     //   | identifier
     //   | "(" expression ")"
-    fn parse(&mut self)-> ParseResult {
+    fn parse(&mut self) -> ParseResult {
         let mut statements = Vec::new();
         while self.has_next_token() {
             statements.push(self.parse_statement()?);
         }
-        Ok(
-            Node::Program {
-                statements,
-            }
-        )
+        Ok(Node::Program { statements })
     }
 
-    fn parse_statement(&mut self)-> ParseResult {
+    fn parse_statement(&mut self) -> ParseResult {
         match self.tokens.peek().unwrap().kind {
             TokenKind::If => self.parse_statement_if(),
             TokenKind::Return => self.parse_statement_return(),
@@ -152,11 +149,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume_token(TokenKind::Return)?;
         let expression = self.parse_expression()?;
         self.consume_token(TokenKind::Semicolon)?;
-        Ok(
-            Node::Return {
-                value: Box::new(expression),
-            }
-        )
+        Ok(Node::Return {
+            value: Box::new(expression),
+        })
     }
 
     fn parse_statement_if(&mut self) -> ParseResult {
@@ -166,25 +161,22 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume_token(TokenKind::ParenthesisRight)?;
         let statement = self.parse_statement()?;
         match self.tokens.peek() {
-            Some(Token { kind: TokenKind::Else, .. }) => {
+            Some(Token {
+                kind: TokenKind::Else,
+                ..
+            }) => {
                 self.consume_token(TokenKind::Else)?;
-                Ok(
-                    Node::If {
-                        condition: Box::new(condition),
-                        statement_true: Box::new(statement),
-                        statement_false: Some(Box::new(self.parse_statement()?)),
-                    }
-                )
-            },
-            _ => {
-                Ok(
-                    Node::If {
-                        condition: Box::new(condition),
-                        statement_true: Box::new(statement),
-                        statement_false: None,
-                    }
-                )
+                Ok(Node::If {
+                    condition: Box::new(condition),
+                    statement_true: Box::new(statement),
+                    statement_false: Some(Box::new(self.parse_statement()?)),
+                })
             }
+            _ => Ok(Node::If {
+                condition: Box::new(condition),
+                statement_true: Box::new(statement),
+                statement_false: None,
+            }),
         }
     }
 
@@ -194,12 +186,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let condition = self.parse_expression()?;
         self.consume_token(TokenKind::ParenthesisRight)?;
         let statement = self.parse_statement()?;
-        Ok(
-            Node::While {
-                condition: Box::new(condition),
-                statement: Box::new(statement),
-            }
-        )
+        Ok(Node::While {
+            condition: Box::new(condition),
+            statement: Box::new(statement),
+        })
     }
 
     fn parse_statement_expression(&mut self) -> ParseResult {
@@ -208,78 +198,92 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         Ok(expression)
     }
 
-    fn parse_expression(&mut self)-> ParseResult {
+    fn parse_expression(&mut self) -> ParseResult {
         self.parse_assign()
     }
 
-    fn parse_assign(&mut self)-> ParseResult {
+    fn parse_assign(&mut self) -> ParseResult {
         let mut node = self.parse_add()?;
         if let Some(token) = self.tokens.peek() {
             match token {
-                Token { kind: TokenKind::Equal, .. } => {
+                Token {
+                    kind: TokenKind::Equal,
+                    ..
+                } => {
                     self.tokens.next();
                     node = Node::Assign {
                         left: Box::new(node),
                         right: Box::new(self.parse_assign()?),
                     };
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
         Ok(node)
     }
 
-    fn parse_add(&mut self)-> ParseResult {
+    fn parse_add(&mut self) -> ParseResult {
         let mut node = self.parse_multiply()?;
         while let Some(token) = self.tokens.peek() {
             match token {
-                Token { kind: TokenKind::Plus, .. } => {
+                Token {
+                    kind: TokenKind::Plus,
+                    ..
+                } => {
                     self.tokens.next();
                     let right = self.parse_multiply()?;
                     node = Node::Add {
                         left: Box::new(node),
                         right: Box::new(right),
                     };
-                },
-                Token { kind: TokenKind::Minus, .. } => {
+                }
+                Token {
+                    kind: TokenKind::Minus,
+                    ..
+                } => {
                     self.tokens.next();
                     let right = self.parse_multiply()?;
                     node = Node::Subtract {
                         left: Box::new(node),
                         right: Box::new(right),
                     };
-                },
+                }
                 _ => {
                     break;
-                },
+                }
             }
         }
         Ok(node)
     }
 
-    fn parse_multiply(&mut self)-> ParseResult {
+    fn parse_multiply(&mut self) -> ParseResult {
         self.parse_unary()
     }
 
-    fn parse_unary(&mut self)-> ParseResult {
+    fn parse_unary(&mut self) -> ParseResult {
         self.parse_primary()
     }
 
-    fn parse_primary(&mut self)-> ParseResult {
+    fn parse_primary(&mut self) -> ParseResult {
         let token = self.tokens.next().expect("Expect token.");
         match token {
-            Token { kind: TokenKind::Integer(value), .. } => {
-                Ok(Node::Integer { value })
-            },
-            Token { kind: TokenKind::Identifier(name), .. } => {
-                Ok(Node::LocalVariable {
-                    local_variable: self.environment.find_local_variable_by(&name).
-                        unwrap_or_else(|| self.environment.add_local_variable(name))
-                })
-            },
-            _ => {
-                Err(ParseError::UnexpectedToken { expected: None, actual: token })
-            }
+            Token {
+                kind: TokenKind::Integer(value),
+                ..
+            } => Ok(Node::Integer { value }),
+            Token {
+                kind: TokenKind::Identifier(name),
+                ..
+            } => Ok(Node::LocalVariable {
+                local_variable: self
+                    .environment
+                    .find_local_variable_by(&name)
+                    .unwrap_or_else(|| self.environment.add_local_variable(name)),
+            }),
+            _ => Err(ParseError::UnexpectedToken {
+                expected: None,
+                actual: token,
+            }),
         }
     }
 
@@ -288,7 +292,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             if token.kind == kind {
                 Ok(())
             } else {
-                Err(ParseError::UnexpectedToken { expected: Some(kind), actual: token })
+                Err(ParseError::UnexpectedToken {
+                    expected: Some(kind),
+                    actual: token,
+                })
             }
         } else {
             Err(ParseError::MissingToken(kind))
@@ -302,8 +309,8 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
 #[cfg(test)]
 mod tests {
+    use super::{parse, LocalVariable, Node};
     use crate::tokenizer::tokenize;
-    use super::{LocalVariable, Node, parse};
 
     #[test]
     fn test_parse_number() {
@@ -311,11 +318,7 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::Integer {
-                        value: 1,
-                    },
-                ],
+                statements: vec![Node::Integer { value: 1 },],
             })
         )
     }
@@ -326,20 +329,10 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::Add {
-                        left: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        ),
-                        right: Box::new(
-                            Node::Integer {
-                                value: 2,
-                            }
-                        )
-                    },
-                ],
+                statements: vec![Node::Add {
+                    left: Box::new(Node::Integer { value: 1 }),
+                    right: Box::new(Node::Integer { value: 2 })
+                },],
             })
         )
     }
@@ -350,20 +343,10 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::Subtract {
-                        left: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        ),
-                        right: Box::new(
-                            Node::Integer {
-                                value: 2,
-                            }
-                        )
-                    },
-                ],
+                statements: vec![Node::Subtract {
+                    left: Box::new(Node::Integer { value: 1 }),
+                    right: Box::new(Node::Integer { value: 2 })
+                },],
             })
         )
     }
@@ -374,29 +357,13 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::Subtract {
-                        left: Box::new(
-                            Node::Add {
-                                left: Box::new(
-                                    Node::Integer {
-                                        value: 1,
-                                    }
-                                ),
-                                right: Box::new(
-                                    Node::Integer {
-                                        value: 2,
-                                    }
-                                ),
-                            }
-                        ),
-                        right: Box::new(
-                            Node::Integer {
-                                value: 3,
-                            }
-                        )
-                    },
-                ],
+                statements: vec![Node::Subtract {
+                    left: Box::new(Node::Add {
+                        left: Box::new(Node::Integer { value: 1 }),
+                        right: Box::new(Node::Integer { value: 2 }),
+                    }),
+                    right: Box::new(Node::Integer { value: 3 })
+                },],
             })
         )
     }
@@ -407,14 +374,12 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::LocalVariable {
-                        local_variable: LocalVariable {
-                            name: "a".to_string(),
-                            offset: 8,
-                        },
+                statements: vec![Node::LocalVariable {
+                    local_variable: LocalVariable {
+                        name: "a".to_string(),
+                        offset: 8,
                     },
-                ],
+                },],
             })
         );
     }
@@ -425,23 +390,15 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::Assign {
-                        left: Box::new(
-                            Node::LocalVariable {
-                                local_variable: LocalVariable {
-                                    name: "a".to_string(),
-                                    offset: 8,
-                                }
-                            }
-                        ),
-                        right: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        )
-                    },
-                ],
+                statements: vec![Node::Assign {
+                    left: Box::new(Node::LocalVariable {
+                        local_variable: LocalVariable {
+                            name: "a".to_string(),
+                            offset: 8,
+                        }
+                    }),
+                    right: Box::new(Node::Integer { value: 1 })
+                },],
             })
         );
     }
@@ -454,19 +411,13 @@ mod tests {
             Ok(Node::Program {
                 statements: vec![
                     Node::Assign {
-                        left: Box::new(
-                            Node::LocalVariable {
-                                local_variable: LocalVariable {
-                                    name: "a".to_string(),
-                                    offset: 8,
-                                },
-                            }
-                        ),
-                        right: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        )
+                        left: Box::new(Node::LocalVariable {
+                            local_variable: LocalVariable {
+                                name: "a".to_string(),
+                                offset: 8,
+                            },
+                        }),
+                        right: Box::new(Node::Integer { value: 1 })
                     },
                     Node::LocalVariable {
                         local_variable: LocalVariable {
@@ -485,15 +436,9 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::Return {
-                        value: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        ),
-                    },
-                ],
+                statements: vec![Node::Return {
+                    value: Box::new(Node::Integer { value: 1 }),
+                },],
             })
         );
     }
@@ -504,27 +449,11 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::If {
-                        condition: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        ),
-                        statement_true: Box::new(
-                            Node::Integer {
-                                value: 2,
-                            }
-                        ),
-                        statement_false: Some(
-                            Box::new(
-                                Node::Integer {
-                                    value: 3,
-                                }
-                            )
-                        ),
-                    },
-                ],
+                statements: vec![Node::If {
+                    condition: Box::new(Node::Integer { value: 1 }),
+                    statement_true: Box::new(Node::Integer { value: 2 }),
+                    statement_false: Some(Box::new(Node::Integer { value: 3 })),
+                },],
             })
         );
     }
@@ -535,20 +464,10 @@ mod tests {
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
-                statements: vec![
-                    Node::While {
-                        condition: Box::new(
-                            Node::Integer {
-                                value: 1,
-                            }
-                        ),
-                        statement: Box::new(
-                            Node::Integer {
-                                value: 2,
-                            }
-                        ),
-                    },
-                ],
+                statements: vec![Node::While {
+                    condition: Box::new(Node::Integer { value: 1 }),
+                    statement: Box::new(Node::Integer { value: 2 }),
+                },],
             })
         );
     }
