@@ -46,6 +46,7 @@ pub struct LocalVariable {
     pub offset: usize,
 }
 
+#[derive(Default)]
 struct Environment {
     local_variables: HashMap<String, LocalVariable>,
     offset: usize,
@@ -70,10 +71,7 @@ impl Environment {
 pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> Node {
     let mut parser = Parser {
         tokens: tokens.peekable(),
-        environment: Environment {
-            local_variables: HashMap::new(),
-            offset: 0,
-        }
+        environment: Environment::default(),
     };
     parser.parse()
 }
