@@ -80,16 +80,11 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    fn next_char(&mut self) -> Option<char> {
-        self.position.column += 1;
-        self.chars.next()
-    }
-
     fn consume_number_literal(&mut self) -> u32 {
         let mut number = 0;
         while let Some(&character) = self.chars.peek() {
             if character.is_ascii_digit() {
-                self.next_char();
+                self.consume_character();
                 number = number * 10 + character.to_digit(10).unwrap();
             } else {
                 break;
@@ -99,16 +94,16 @@ impl<'a> Tokens<'a> {
     }
 
     fn consume_character_literal(&mut self) -> char {
-        self.next_char();
-        let character = self.next_char();
-        self.next_char();
+        self.consume_character();
+        let character = self.consume_character();
+        self.consume_character();
         character.unwrap()
     }
 
     fn consume_string_literal(&mut self) -> String {
         let mut string = String::new();
-        self.next_char();
-        while let Some(character) = self.next_char() {
+        self.consume_character();
+        while let Some(character) = self.consume_character() {
             if character == '"' {
                 break;
             } else {
@@ -123,7 +118,7 @@ impl<'a> Tokens<'a> {
         while let Some(&character) = self.chars.peek() {
             if character.is_ascii_alphanumeric() {
                 string.push(character);
-                self.next_char();
+                self.consume_character();
             } else {
                 break;
             }
@@ -131,18 +126,27 @@ impl<'a> Tokens<'a> {
         string
     }
 
-    fn skip_whitespaces(&mut self) {
+    fn consume_whitespaces(&mut self) {
         while let Some(&character) = self.chars.peek() {
             if character == '\n' {
-                self.position.column = 1;
-                self.position.line += 1;
-                self.chars.next();
+                self.consume_new_line();
             } else if character.is_whitespace() {
-                self.next_char();
+                self.consume_character();
             } else {
                 break;
             }
         }
+    }
+
+    fn consume_new_line(&mut self) {
+        self.position.column = 1;
+        self.position.line += 1;
+        self.chars.next();
+    }
+
+    fn consume_character(&mut self) -> Option<char> {
+        self.position.column += 1;
+        self.chars.next()
     }
 }
 
@@ -150,47 +154,47 @@ impl Iterator for Tokens<'_> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.skip_whitespaces();
+        self.consume_whitespaces();
         let mut token = None;
         if let Some(&character) = self.chars.peek() {
             let position = self.position.clone();
             match character {
                 ';' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::Semicolon), position));
                 }
                 '+' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::Plus), position));
                 }
                 '-' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::Minus), position));
                 }
                 '=' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::Equal), position));
                 }
                 '(' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(
                         TokenKind::Symbol(Symbol::ParenthesisLeft),
                         position,
                     ));
                 }
                 ')' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(
                         TokenKind::Symbol(Symbol::ParenthesisRight),
                         position,
                     ));
                 }
                 '{' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::BraceLeft), position));
                 }
                 '}' => {
-                    self.next_char();
+                    self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::BraceRight), position));
                 }
                 '"' => {
