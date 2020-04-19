@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::iter::Peekable;
 
-use crate::tokenizer::{Token, TokenKind};
+use crate::tokenizer::{Token, TokenKind, Keyword};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Node {
@@ -149,10 +149,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     fn parse_statement(&mut self) -> ParseResult {
         match self.tokens.peek().unwrap().kind {
-            TokenKind::For => self.parse_statement_for(),
-            TokenKind::If => self.parse_statement_if(),
-            TokenKind::Return => self.parse_statement_return(),
-            TokenKind::While => self.parse_statement_while(),
+            TokenKind::Keyword(Keyword::For) => self.parse_statement_for(),
+            TokenKind::Keyword(Keyword::If) => self.parse_statement_if(),
+            TokenKind::Keyword(Keyword::Return) => self.parse_statement_return(),
+            TokenKind::Keyword(Keyword::While) => self.parse_statement_while(),
             TokenKind::BraceLeft => self.parse_statement_block(),
             _ => self.parse_statement_expression(),
         }
@@ -169,7 +169,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn parse_statement_for(&mut self) -> ParseResult {
-        self.consume_token(TokenKind::For)?;
+        self.consume_token(TokenKind::Keyword(Keyword::For))?;
         self.consume_token(TokenKind::ParenthesisLeft)?;
         let mut initialization = None;
         let mut condition = None;
@@ -201,7 +201,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn parse_statement_return(&mut self) -> ParseResult {
-        self.consume_token(TokenKind::Return)?;
+        self.consume_token(TokenKind::Keyword(Keyword::Return))?;
         let expression = self.parse_expression()?;
         self.consume_token(TokenKind::Semicolon)?;
         Ok(Node::Return {
@@ -210,17 +210,17 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn parse_statement_if(&mut self) -> ParseResult {
-        self.consume_token(TokenKind::If)?;
+        self.consume_token(TokenKind::Keyword(Keyword::If))?;
         self.consume_token(TokenKind::ParenthesisLeft)?;
         let condition = self.parse_expression()?;
         self.consume_token(TokenKind::ParenthesisRight)?;
         let statement = self.parse_statement()?;
         match self.tokens.peek() {
             Some(Token {
-                kind: TokenKind::Else,
+                kind: TokenKind::Keyword(Keyword::Else),
                 ..
             }) => {
-                self.consume_token(TokenKind::Else)?;
+                self.consume_token(TokenKind::Keyword(Keyword::Else))?;
                 Ok(Node::If {
                     condition: Box::new(condition),
                     statement_true: Box::new(statement),
@@ -236,7 +236,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn parse_statement_while(&mut self) -> ParseResult {
-        self.consume_token(TokenKind::While)?;
+        self.consume_token(TokenKind::Keyword(Keyword::While))?;
         self.consume_token(TokenKind::ParenthesisLeft)?;
         let condition = self.parse_expression()?;
         self.consume_token(TokenKind::ParenthesisRight)?;

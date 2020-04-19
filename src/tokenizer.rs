@@ -6,6 +6,15 @@ pub fn tokenize(input: &str) -> Tokens {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum Keyword {
+    Else,
+    For,
+    If,
+    Return,
+    While,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum TokenKind {
     Semicolon,
     Plus,
@@ -15,11 +24,7 @@ pub enum TokenKind {
     BraceRight,
     ParenthesisLeft,
     ParenthesisRight,
-    If,
-    Else,
-    While,
-    For,
-    Return,
+    Keyword(Keyword),
     Integer(u32),
     String(String),
     Character(char),
@@ -194,19 +199,19 @@ impl Iterator for Tokens<'_> {
                         let name = self.consume_identifier();
                         match &*name {
                             "if" => {
-                                token = Some(Token::new(TokenKind::If, position));
+                                token = Some(Token::new(TokenKind::Keyword(Keyword::If), position));
                             }
                             "else" => {
-                                token = Some(Token::new(TokenKind::Else, position));
+                                token = Some(Token::new(TokenKind::Keyword(Keyword::Else), position));
                             }
                             "return" => {
-                                token = Some(Token::new(TokenKind::Return, position));
+                                token = Some(Token::new(TokenKind::Keyword(Keyword::Return), position));
                             }
                             "while" => {
-                                token = Some(Token::new(TokenKind::While, position));
+                                token = Some(Token::new(TokenKind::Keyword(Keyword::While), position));
                             }
                             "for" => {
-                                token = Some(Token::new(TokenKind::For, position));
+                                token = Some(Token::new(TokenKind::Keyword(Keyword::For), position));
                             }
                             _ => {
                                 token = Some(Token::new(TokenKind::Identifier(name), position));
@@ -222,7 +227,7 @@ impl Iterator for Tokens<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{tokenize, Position, Token, TokenKind};
+    use super::{tokenize, Position, Token, TokenKind, Keyword};
 
     #[test]
     fn test_tokenize_empty_string() {
@@ -291,14 +296,14 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(TokenKind::If, Position::new(1, 1)),
+                Token::new(TokenKind::Keyword(Keyword::If), Position::new(1, 1)),
                 Token::new(TokenKind::ParenthesisLeft, Position::new(4, 1)),
                 Token::new(TokenKind::Integer(1), Position::new(5, 1)),
                 Token::new(TokenKind::ParenthesisRight, Position::new(6, 1)),
                 Token::new(TokenKind::BraceLeft, Position::new(8, 1)),
                 Token::new(TokenKind::Integer(2), Position::new(10, 1)),
                 Token::new(TokenKind::BraceRight, Position::new(12, 1)),
-                Token::new(TokenKind::Else, Position::new(14, 1)),
+                Token::new(TokenKind::Keyword(Keyword::Else), Position::new(14, 1)),
                 Token::new(TokenKind::BraceLeft, Position::new(19, 1)),
                 Token::new(TokenKind::Integer(3), Position::new(21, 1)),
                 Token::new(TokenKind::BraceRight, Position::new(23, 1)),
@@ -312,11 +317,11 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(TokenKind::While, Position::new(1, 1)),
+                Token::new(TokenKind::Keyword(Keyword::While), Position::new(1, 1)),
                 Token::new(TokenKind::ParenthesisLeft, Position::new(7, 1)),
                 Token::new(TokenKind::Integer(1), Position::new(8, 1)),
                 Token::new(TokenKind::ParenthesisRight, Position::new(9, 1)),
-                Token::new(TokenKind::Return, Position::new(11, 1)),
+                Token::new(TokenKind::Keyword(Keyword::Return), Position::new(11, 1)),
                 Token::new(TokenKind::Integer(2), Position::new(18, 1)),
                 Token::new(TokenKind::Semicolon, Position::new(19, 1)),
             ]
@@ -341,7 +346,7 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::new(TokenKind::For, Position::new(1, 1)),
+                Token::new(TokenKind::Keyword(Keyword::For), Position::new(1, 1)),
                 Token::new(TokenKind::ParenthesisLeft, Position::new(5, 1)),
                 Token::new(TokenKind::Identifier("i".to_string()), Position::new(6, 1)),
                 Token::new(TokenKind::Equal, Position::new(8, 1)),
