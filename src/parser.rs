@@ -3,6 +3,10 @@ use std::iter::Peekable;
 
 use crate::tokenizer::{Keyword, Symbol, Token, TokenKind};
 
+pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> ParseResult {
+    Parser::new(tokens).parse()
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum NodeKind {
     Program {
@@ -114,20 +118,19 @@ pub enum ParseError {
 
 type ParseResult = Result<Node, ParseError>;
 
-pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> ParseResult {
-    let mut parser = Parser {
-        tokens: tokens.peekable(),
-        environment: Environment::default(),
-    };
-    parser.parse()
-}
-
 struct Parser<T: Iterator<Item = Token>> {
     environment: Environment,
     tokens: Peekable<T>,
 }
 
 impl<T: Iterator<Item = Token>> Parser<T> {
+    fn new(tokens: T) -> Self {
+        Parser {
+            tokens: tokens.peekable(),
+            environment: Environment::default(),
+        }
+    }
+
     // program
     //   = function_definition*
     //
