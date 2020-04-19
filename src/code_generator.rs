@@ -11,15 +11,11 @@ struct CodeGenerator {
 
 impl CodeGenerator {
     fn generate(&mut self, node: Node) {
-        println!(".intel_syntax noprefix");
-        self.process(node);
-    }
-
-    fn process(&mut self, node: Node) {
         match node.kind {
             NodeKind::Program {
                 function_definitions,
             } => {
+                println!(".intel_syntax noprefix");
                 for function_definition in function_definitions {
                     if let Node {
                         kind: NodeKind::FunctionDefinition { name, block },
@@ -30,7 +26,7 @@ impl CodeGenerator {
                         println!("  push rbp");
                         println!("  mov rbp, rsp");
                         println!("  sub rsp, 16"); // TODO: Adjust 16 for local variables count.
-                        self.process(*block);
+                        self.generate(*block);
                     }
                 }
             }
@@ -38,32 +34,32 @@ impl CodeGenerator {
                 println!("  push {}", value);
             }
             NodeKind::Add { left, right } => {
-                self.process(*left);
-                self.process(*right);
+                self.generate(*left);
+                self.generate(*right);
                 println!("  pop rdi");
                 println!("  pop rax");
                 println!("  add rax, rdi");
                 println!("  push rax");
             }
             NodeKind::Subtract { left, right } => {
-                self.process(*left);
-                self.process(*right);
+                self.generate(*left);
+                self.generate(*right);
                 println!("  pop rdi");
                 println!("  pop rax");
                 println!("  sub rax, rdi");
                 println!("  push rax");
             }
             NodeKind::Assign { left, right } => {
-                self.process_address_of(*left);
-                self.process(*right);
+                self.generate_address_of(*left);
+                self.generate(*right);
                 self.store();
             }
             NodeKind::LocalVariable { .. } => {
-                self.process_address_of(node);
+                self.generate_address_of(node);
                 self.load();
             }
             NodeKind::Return { value } => {
-                self.process(*value);
+                self.generate(*value);
                 self.return_();
             }
             NodeKind::If {
@@ -73,21 +69,21 @@ impl CodeGenerator {
             } => {
                 self.labels_count += 1;
                 if statement_false.is_some() {
-                    self.process(*condition);
+                    self.generate(*condition);
                     println!("  pop rax");
                     println!("  cmp rax, 0");
                     println!("  je .Lelse{}", self.labels_count);
-                    self.process(*statement_true);
+                    self.generate(*statement_true);
                     println!("  jmp .Lend{}", self.labels_count);
                     println!(".Lelse{}:", self.labels_count);
-                    self.process(*statement_false.unwrap());
+                    self.generate(*statement_false.unwrap());
                     println!(".Lend{}:", self.labels_count);
                 } else {
-                    self.process(*condition);
+                    self.generate(*condition);
                     println!("  pop rax");
                     println!("  cmp rax, 0");
                     println!("  je .Lend{}", self.labels_count);
-                    self.process(*statement_true);
+                    self.generate(*statement_true);
                     println!(".Lend{}:", self.labels_count);
                 }
             }
@@ -97,11 +93,11 @@ impl CodeGenerator {
             } => {
                 self.labels_count += 1;
                 println!(".Lbegin{}:", self.labels_count);
-                self.process(*condition);
+                self.generate(*condition);
                 println!("  pop rax");
                 println!("  cmp rax, 0");
                 println!("  je .Lend{}", self.labels_count);
-                self.process(*statement);
+                self.generate(*statement);
                 println!("  jmp .Lbegin{}", self.labels_count);
                 println!(".Lend{}:", self.labels_count);
             }
@@ -113,32 +109,32 @@ impl CodeGenerator {
             } => {
                 self.labels_count += 1;
                 if initialization.is_some() {
-                    self.process(*initialization.unwrap());
+                    self.generate(*initialization.unwrap());
                 }
                 println!(".Lbegin{}:", self.labels_count);
                 if condition.is_some() {
-                    self.process(*condition.unwrap());
+                    self.generate(*condition.unwrap());
                     println!("  pop rax");
                     println!("  cmp rax, 0");
                     println!("  je .Lend{}", self.labels_count);
                 }
-                self.process(*statement);
+                self.generate(*statement);
                 if afterthrough.is_some() {
-                    self.process(*afterthrough.unwrap());
+                    self.generate(*afterthrough.unwrap());
                 }
                 println!("  jmp .Lbegin{}", self.labels_count);
                 println!(".Lend{}:", self.labels_count);
             }
             NodeKind::Block { statements } => {
                 for statement in statements {
-                    self.process(statement);
+                    self.generate(statement);
                 }
             }
             _ => {}
         }
     }
 
-    fn process_address_of(&self, node: Node) {
+    fn generate_address_of(&self, node: Node) {
         if let NodeKind::LocalVariable { local_variable } = node.kind {
             println!("  mov rax, rbp");
             println!("  sub rax, {}", local_variable.offset);
