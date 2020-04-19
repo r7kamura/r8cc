@@ -12,20 +12,23 @@ struct CodeGenerator {
 impl CodeGenerator {
     fn generate(&mut self, node: Node) {
         println!(".intel_syntax noprefix");
-        println!(".global main");
-        println!("main:");
         self.process(node);
-        self.return_();
     }
 
     fn process(&mut self, node: Node) {
         match node {
-            Node::Program { statements } => {
-                println!("  push rbp");
-                println!("  mov rbp, rsp");
-                println!("  sub rsp, 16"); // TODO: Adjust 16 for local variables count.
-                for statement in statements {
-                    self.process(statement);
+            Node::Program {
+                function_definitions,
+            } => {
+                for function_definition in function_definitions {
+                    if let Node::FunctionDefinition { name, block } = function_definition {
+                        println!(".global {}", name);
+                        println!("{}:", name);
+                        println!("  push rbp");
+                        println!("  mov rbp, rsp");
+                        println!("  sub rsp, 16"); // TODO: Adjust 16 for local variables count.
+                        self.process(*block);
+                    }
                 }
             }
             Node::Integer { value } => {
