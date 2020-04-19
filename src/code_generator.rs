@@ -128,6 +128,7 @@ impl CodeGenerator {
                     self.process(statement);
                 }
             }
+            _ => {}
         }
     }
 

@@ -47,6 +47,15 @@ pub enum Node {
     Block {
         statements: Vec<Node>,
     },
+    LocalVariableDeclaration,
+    Type {
+        type_: Type,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Type {
+    Integer,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -85,6 +94,10 @@ pub enum ParseError {
         expected: Option<TokenKind>, // Use this hint field whenever there is one expected TokenKind.
         actual: Token,
     },
+    UnexpectedEos,
+    UndefinedLocalVariable {
+        name: String,
+    },
 }
 
 type ParseResult = Result<Node, ParseError>;
@@ -111,6 +124,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   | "if" "(" expression ")" statement ("else" statement)?
     //   | "while" "(" expression ")" statement
     //   | "for" "(" expression? ";" expression? ";" expression? ")" statement
+    //   | type identifier ";"
     //   | "{" statements* "}"
     //   | expression ";"
     //
@@ -153,6 +167,9 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             TokenKind::Keyword(Keyword::If) => self.parse_statement_if(),
             TokenKind::Keyword(Keyword::Return) => self.parse_statement_return(),
             TokenKind::Keyword(Keyword::While) => self.parse_statement_while(),
+            TokenKind::Keyword(Keyword::Integer) => {
+                self.parse_statement_local_variable_declaration()
+            }
             TokenKind::Symbol(Symbol::BraceLeft) => self.parse_statement_block(),
             _ => self.parse_statement_expression(),
         }
@@ -247,6 +264,34 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         })
     }
 
+    fn parse_statement_local_variable_declaration(&mut self) -> ParseResult {
+        self.parse_type()?;
+        match self.tokens.next() {
+            Some(token) => match token {
+                Token {
+                    kind: TokenKind::Identifier(name),
+                    ..
+                } => {
+                    self.environment.add_local_variable(name);
+                    self.consume_token(TokenKind::Symbol(Symbol::Semicolon))?;
+                    Ok(Node::LocalVariableDeclaration)
+                }
+                _ => Err(ParseError::UnexpectedToken {
+                    expected: None,
+                    actual: token,
+                }),
+            },
+            _ => Err(ParseError::UnexpectedEos),
+        }
+    }
+
+    fn parse_type(&mut self) -> ParseResult {
+        self.consume_token(TokenKind::Keyword(Keyword::Integer))?;
+        Ok(Node::Type {
+            type_: Type::Integer,
+        })
+    }
+
     fn parse_statement_expression(&mut self) -> ParseResult {
         let expression = self.parse_expression()?;
         self.consume_token(TokenKind::Symbol(Symbol::Semicolon))?;
@@ -329,12 +374,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             Token {
                 kind: TokenKind::Identifier(name),
                 ..
-            } => Ok(Node::LocalVariable {
-                local_variable: self
-                    .environment
-                    .find_local_variable_by(&name)
-                    .unwrap_or_else(|| self.environment.add_local_variable(name)),
-            }),
+            } => {
+                if let Some(local_variable) = self.environment.find_local_variable_by(&name) {
+                    Ok(Node::LocalVariable { local_variable })
+                } else {
+                    Err(ParseError::UndefinedLocalVariable { name })
+                }
+            }
             _ => Err(ParseError::UnexpectedToken {
                 expected: None,
                 actual: token,
@@ -368,7 +414,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, LocalVariable, Node};
+    use super::{parse, LocalVariable, Node, ParseError};
     use crate::tokenizer::tokenize;
 
     #[test]
@@ -428,63 +474,34 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_local_variable() {
-        let tokens = tokenize("a;");
-        assert_eq!(
-            parse(tokens),
-            Ok(Node::Program {
-                statements: vec![Node::LocalVariable {
-                    local_variable: LocalVariable {
-                        name: "a".to_string(),
-                        offset: 8,
-                    },
-                },],
-            })
-        );
-    }
-
-    #[test]
     fn test_parse_assign() {
-        let tokens = tokenize("a = 1;");
-        assert_eq!(
-            parse(tokens),
-            Ok(Node::Program {
-                statements: vec![Node::Assign {
-                    left: Box::new(Node::LocalVariable {
-                        local_variable: LocalVariable {
-                            name: "a".to_string(),
-                            offset: 8,
-                        }
-                    }),
-                    right: Box::new(Node::Integer { value: 1 })
-                },],
-            })
-        );
-    }
-
-    #[test]
-    fn test_parse_statements() {
-        let tokens = tokenize("a = 1; a;");
+        let tokens = tokenize("int a; a = 1;");
         assert_eq!(
             parse(tokens),
             Ok(Node::Program {
                 statements: vec![
+                    Node::LocalVariableDeclaration,
                     Node::Assign {
                         left: Box::new(Node::LocalVariable {
                             local_variable: LocalVariable {
                                 name: "a".to_string(),
                                 offset: 8,
-                            },
+                            }
                         }),
                         right: Box::new(Node::Integer { value: 1 })
-                    },
-                    Node::LocalVariable {
-                        local_variable: LocalVariable {
-                            name: "a".to_string(),
-                            offset: 8,
-                        },
-                    },
+                    }
                 ],
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_undefined_variable() {
+        let tokens = tokenize("a;");
+        assert_eq!(
+            parse(tokens),
+            Err(ParseError::UndefinedLocalVariable {
+                name: "a".to_string()
             })
         );
     }

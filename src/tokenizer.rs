@@ -22,6 +22,7 @@ pub enum Keyword {
     Else,
     For,
     If,
+    Integer,
     Return,
     While,
 }
@@ -212,6 +213,10 @@ impl Iterator for Tokens<'_> {
                             "if" => {
                                 token = Some(Token::new(TokenKind::Keyword(Keyword::If), position));
                             }
+                            "int" => {
+                                token =
+                                    Some(Token::new(TokenKind::Keyword(Keyword::Integer), position))
+                            }
                             "else" => {
                                 token =
                                     Some(Token::new(TokenKind::Keyword(Keyword::Else), position));
@@ -397,5 +402,18 @@ mod tests {
                 Token::new(TokenKind::Symbol(Symbol::Semicolon), Position::new(29, 1)),
             ]
         )
+    }
+
+    #[test]
+    fn test_tokenize_integer_declaration() {
+        let tokens: Vec<Token> = tokenize("int a;").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(TokenKind::Keyword(Keyword::Integer), Position::new(1, 1)),
+                Token::new(TokenKind::Identifier("a".to_string()), Position::new(5, 1)),
+                Token::new(TokenKind::Symbol(Symbol::Semicolon), Position::new(6, 1)),
+            ]
+        );
     }
 }
