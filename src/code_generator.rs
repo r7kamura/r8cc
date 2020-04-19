@@ -1,4 +1,4 @@
-use crate::parser::Node;
+use crate::parser::{Node, NodeKind};
 
 pub fn generate(node: Node) {
     CodeGenerator::default().generate(node);
@@ -16,12 +16,15 @@ impl CodeGenerator {
     }
 
     fn process(&mut self, node: Node) {
-        match node {
-            Node::Program {
+        match node.kind {
+            NodeKind::Program {
                 function_definitions,
             } => {
                 for function_definition in function_definitions {
-                    if let Node::FunctionDefinition { name, block } = function_definition {
+                    if let Node {
+                        kind: NodeKind::FunctionDefinition { name, block },
+                    } = function_definition
+                    {
                         println!(".global {}", name);
                         println!("{}:", name);
                         println!("  push rbp");
@@ -31,10 +34,10 @@ impl CodeGenerator {
                     }
                 }
             }
-            Node::Integer { value } => {
+            NodeKind::Integer { value } => {
                 println!("  push {}", value);
             }
-            Node::Add { left, right } => {
+            NodeKind::Add { left, right } => {
                 self.process(*left);
                 self.process(*right);
                 println!("  pop rdi");
@@ -42,7 +45,7 @@ impl CodeGenerator {
                 println!("  add rax, rdi");
                 println!("  push rax");
             }
-            Node::Subtract { left, right } => {
+            NodeKind::Subtract { left, right } => {
                 self.process(*left);
                 self.process(*right);
                 println!("  pop rdi");
@@ -50,20 +53,20 @@ impl CodeGenerator {
                 println!("  sub rax, rdi");
                 println!("  push rax");
             }
-            Node::Assign { left, right } => {
+            NodeKind::Assign { left, right } => {
                 self.process_address_of(*left);
                 self.process(*right);
                 self.store();
             }
-            Node::LocalVariable { .. } => {
+            NodeKind::LocalVariable { .. } => {
                 self.process_address_of(node);
                 self.load();
             }
-            Node::Return { value } => {
+            NodeKind::Return { value } => {
                 self.process(*value);
                 self.return_();
             }
-            Node::If {
+            NodeKind::If {
                 condition,
                 statement_true,
                 statement_false,
@@ -88,7 +91,7 @@ impl CodeGenerator {
                     println!(".Lend{}:", self.labels_count);
                 }
             }
-            Node::While {
+            NodeKind::While {
                 condition,
                 statement,
             } => {
@@ -102,7 +105,7 @@ impl CodeGenerator {
                 println!("  jmp .Lbegin{}", self.labels_count);
                 println!(".Lend{}:", self.labels_count);
             }
-            Node::For {
+            NodeKind::For {
                 initialization,
                 condition,
                 afterthrough,
@@ -126,7 +129,7 @@ impl CodeGenerator {
                 println!("  jmp .Lbegin{}", self.labels_count);
                 println!(".Lend{}:", self.labels_count);
             }
-            Node::Block { statements } => {
+            NodeKind::Block { statements } => {
                 for statement in statements {
                     self.process(statement);
                 }
@@ -136,7 +139,7 @@ impl CodeGenerator {
     }
 
     fn process_address_of(&self, node: Node) {
-        if let Node::LocalVariable { local_variable } = node {
+        if let NodeKind::LocalVariable { local_variable } = node.kind {
             println!("  mov rax, rbp");
             println!("  sub rax, {}", local_variable.offset);
             println!("  push rax");
