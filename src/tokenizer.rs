@@ -172,11 +172,17 @@ impl Iterator for Tokens<'_> {
                 }
                 '(' => {
                     self.next_char();
-                    token = Some(Token::new(TokenKind::Symbol(Symbol::ParenthesisLeft), position));
+                    token = Some(Token::new(
+                        TokenKind::Symbol(Symbol::ParenthesisLeft),
+                        position,
+                    ));
                 }
                 ')' => {
                     self.next_char();
-                    token = Some(Token::new(TokenKind::Symbol(Symbol::ParenthesisRight), position));
+                    token = Some(Token::new(
+                        TokenKind::Symbol(Symbol::ParenthesisRight),
+                        position,
+                    ));
                 }
                 '{' => {
                     self.next_char();
@@ -207,16 +213,20 @@ impl Iterator for Tokens<'_> {
                                 token = Some(Token::new(TokenKind::Keyword(Keyword::If), position));
                             }
                             "else" => {
-                                token = Some(Token::new(TokenKind::Keyword(Keyword::Else), position));
+                                token =
+                                    Some(Token::new(TokenKind::Keyword(Keyword::Else), position));
                             }
                             "return" => {
-                                token = Some(Token::new(TokenKind::Keyword(Keyword::Return), position));
+                                token =
+                                    Some(Token::new(TokenKind::Keyword(Keyword::Return), position));
                             }
                             "while" => {
-                                token = Some(Token::new(TokenKind::Keyword(Keyword::While), position));
+                                token =
+                                    Some(Token::new(TokenKind::Keyword(Keyword::While), position));
                             }
                             "for" => {
-                                token = Some(Token::new(TokenKind::Keyword(Keyword::For), position));
+                                token =
+                                    Some(Token::new(TokenKind::Keyword(Keyword::For), position));
                             }
                             _ => {
                                 token = Some(Token::new(TokenKind::Identifier(name), position));
@@ -232,7 +242,7 @@ impl Iterator for Tokens<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{tokenize, Position, Token, TokenKind, Keyword, Symbol};
+    use super::{tokenize, Keyword, Position, Symbol, Token, TokenKind};
 
     #[test]
     fn test_tokenize_empty_string() {
@@ -302,9 +312,15 @@ mod tests {
             tokens,
             vec![
                 Token::new(TokenKind::Keyword(Keyword::If), Position::new(1, 1)),
-                Token::new(TokenKind::Symbol(Symbol::ParenthesisLeft), Position::new(4, 1)),
+                Token::new(
+                    TokenKind::Symbol(Symbol::ParenthesisLeft),
+                    Position::new(4, 1)
+                ),
                 Token::new(TokenKind::Integer(1), Position::new(5, 1)),
-                Token::new(TokenKind::Symbol(Symbol::ParenthesisRight), Position::new(6, 1)),
+                Token::new(
+                    TokenKind::Symbol(Symbol::ParenthesisRight),
+                    Position::new(6, 1)
+                ),
                 Token::new(TokenKind::Symbol(Symbol::BraceLeft), Position::new(8, 1)),
                 Token::new(TokenKind::Integer(2), Position::new(10, 1)),
                 Token::new(TokenKind::Symbol(Symbol::BraceRight), Position::new(12, 1)),
@@ -323,9 +339,15 @@ mod tests {
             tokens,
             vec![
                 Token::new(TokenKind::Keyword(Keyword::While), Position::new(1, 1)),
-                Token::new(TokenKind::Symbol(Symbol::ParenthesisLeft), Position::new(7, 1)),
+                Token::new(
+                    TokenKind::Symbol(Symbol::ParenthesisLeft),
+                    Position::new(7, 1)
+                ),
                 Token::new(TokenKind::Integer(1), Position::new(8, 1)),
-                Token::new(TokenKind::Symbol(Symbol::ParenthesisRight), Position::new(9, 1)),
+                Token::new(
+                    TokenKind::Symbol(Symbol::ParenthesisRight),
+                    Position::new(9, 1)
+                ),
                 Token::new(TokenKind::Keyword(Keyword::Return), Position::new(11, 1)),
                 Token::new(TokenKind::Integer(2), Position::new(18, 1)),
                 Token::new(TokenKind::Symbol(Symbol::Semicolon), Position::new(19, 1)),
@@ -352,7 +374,10 @@ mod tests {
             tokens,
             vec![
                 Token::new(TokenKind::Keyword(Keyword::For), Position::new(1, 1)),
-                Token::new(TokenKind::Symbol(Symbol::ParenthesisLeft), Position::new(5, 1)),
+                Token::new(
+                    TokenKind::Symbol(Symbol::ParenthesisLeft),
+                    Position::new(5, 1)
+                ),
                 Token::new(TokenKind::Identifier("i".to_string()), Position::new(6, 1)),
                 Token::new(TokenKind::Symbol(Symbol::Equal), Position::new(8, 1)),
                 Token::new(TokenKind::Integer(10), Position::new(10, 1)),
@@ -364,7 +389,10 @@ mod tests {
                 Token::new(TokenKind::Identifier("i".to_string()), Position::new(21, 1)),
                 Token::new(TokenKind::Symbol(Symbol::Minus), Position::new(23, 1)),
                 Token::new(TokenKind::Integer(1), Position::new(25, 1)),
-                Token::new(TokenKind::Symbol(Symbol::ParenthesisRight), Position::new(26, 1)),
+                Token::new(
+                    TokenKind::Symbol(Symbol::ParenthesisRight),
+                    Position::new(26, 1)
+                ),
                 Token::new(TokenKind::Integer(2), Position::new(28, 1)),
                 Token::new(TokenKind::Symbol(Symbol::Semicolon), Position::new(29, 1)),
             ]

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::iter::Peekable;
 
-use crate::tokenizer::{Token, TokenKind, Keyword, Symbol};
+use crate::tokenizer::{Keyword, Symbol, Token, TokenKind};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Node {
