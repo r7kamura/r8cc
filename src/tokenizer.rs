@@ -2,7 +2,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 pub fn tokenize(input: &str) -> Tokens {
-    Tokens::new(input.chars().peekable())
+    Tokens::new(input)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,9 +72,9 @@ pub struct Tokens<'a> {
 }
 
 impl<'a> Tokens<'a> {
-    fn new(chars: Peekable<Chars<'a>>) -> Self {
+    fn new(input: &'a str) -> Self {
         Self {
-            chars,
+            chars: input.chars().peekable(),
             position: Position::default(),
         }
     }
