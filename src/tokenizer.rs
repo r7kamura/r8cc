@@ -7,6 +7,8 @@ pub fn tokenize(input: &str) -> Tokens {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Symbol {
+    Ampersand,
+    Asterisk,
     BraceLeft,
     BraceRight,
     Equal,
@@ -174,6 +176,14 @@ impl Iterator for Tokens<'_> {
                 '=' => {
                     self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::Equal), position));
+                }
+                '&' => {
+                    self.consume_character();
+                    token = Some(Token::new(TokenKind::Symbol(Symbol::Ampersand), position));
+                }
+                '*' => {
+                    self.consume_character();
+                    token = Some(Token::new(TokenKind::Symbol(Symbol::Asterisk), position));
                 }
                 '(' => {
                     self.consume_character();

@@ -33,6 +33,13 @@ impl CodeGenerator {
             NodeKind::Integer { value } => {
                 println!("  push {}", value);
             }
+            NodeKind::Reference { value } => {
+                self.generate_address_of(*value);
+            }
+            NodeKind::Dereference { value } => {
+                self.generate(*value);
+                self.load();
+            }
             NodeKind::Add { left, right } => {
                 self.generate(*left);
                 self.generate(*right);

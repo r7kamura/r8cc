@@ -15,6 +15,12 @@ pub enum NodeKind {
     Integer {
         value: u32,
     },
+    Reference {
+        value: Box<Node>,
+    },
+    Dereference {
+        value: Box<Node>,
+    },
     Add {
         left: Box<Node>,
         right: Box<Node>,
@@ -69,6 +75,7 @@ pub struct Node {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Type {
     Integer,
+    Pointer(Box<Type>),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -168,7 +175,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   = unary ("*" unary | "/" unary)*
     //
     // unary
-    //   = ("+" | "-")? primary
+    //   = "+" primary
+    //   | "-" primary
+    //   | "&" unary
+    //   | "*" unary
+    //   | primary
     //
     // primary
     //   = number
@@ -353,10 +364,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
     fn parse_type(&mut self) -> ParseResult {
         self.consume_token_of(TokenKind::Keyword(Keyword::Integer))?;
+        let mut type_ = Type::Integer;
+        while self.has_next_token(TokenKind::Symbol(Symbol::Asterisk)) {
+            type_ = Type::Pointer(Box::new(type_));
+            self.consume_token()?;
+        }
         Ok(Node {
-            kind: NodeKind::Type {
-                type_: Type::Integer,
-            },
+            kind: NodeKind::Type { type_ },
         })
     }
 
@@ -435,7 +449,40 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn parse_unary(&mut self) -> ParseResult {
-        self.parse_primary()
+        if let Some(token) = self.tokens.peek() {
+            match token.kind {
+                TokenKind::Symbol(Symbol::Minus) => {
+                    self.consume_token_of(TokenKind::Symbol(Symbol::Minus))?;
+                    Ok(Node {
+                        kind: NodeKind::Subtract {
+                            left: Box::new(Node {
+                                kind: NodeKind::Integer { value: 0 },
+                            }),
+                            right: Box::new(self.parse_primary()?),
+                        },
+                    })
+                }
+                TokenKind::Symbol(Symbol::Ampersand) => {
+                    self.consume_token_of(TokenKind::Symbol(Symbol::Ampersand))?;
+                    Ok(Node {
+                        kind: NodeKind::Reference {
+                            value: Box::new(self.parse_unary()?),
+                        },
+                    })
+                }
+                TokenKind::Symbol(Symbol::Asterisk) => {
+                    self.consume_token_of(TokenKind::Symbol(Symbol::Asterisk))?;
+                    Ok(Node {
+                        kind: NodeKind::Dereference {
+                            value: Box::new(self.parse_unary()?),
+                        },
+                    })
+                }
+                _ => self.parse_primary(),
+            }
+        } else {
+            Err(ParseError::UnexpectedEos)
+        }
     }
 
     fn parse_primary(&mut self) -> ParseResult {
