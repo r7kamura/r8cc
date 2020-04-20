@@ -1,4 +1,4 @@
-use crate::parser::{Node, NodeKind};
+use crate::parser::{Node, NodeKind, Type};
 
 pub fn generate(node: Node) {
     CodeGenerator::default().generate(node);
@@ -19,6 +19,7 @@ impl CodeGenerator {
                 for function_definition in function_definitions {
                     if let Node {
                         kind: NodeKind::FunctionDefinition { name, block },
+                        ..
                     } = function_definition
                     {
                         println!(".global {}", name);
@@ -33,9 +34,14 @@ impl CodeGenerator {
             NodeKind::Integer { value } => {
                 println!("  push {}", value);
             }
-            NodeKind::Reference { value } => {
-                self.generate_address_of(*value);
-            }
+            NodeKind::Reference { value } => match value.type_.clone() {
+                Type::Array { .. } => {
+                    self.generate(*value);
+                }
+                _ => {
+                    self.generate_address_of(*value);
+                }
+            },
             NodeKind::Dereference { value } => {
                 self.generate(*value);
                 self.load();
@@ -56,15 +62,48 @@ impl CodeGenerator {
                 println!("  sub rax, rdi");
                 println!("  push rax");
             }
+            NodeKind::AddPointer { left, right } => match left.type_.clone() {
+                Type::Pointer { type_ } | Type::Array { type_, .. } => {
+                    self.generate(*left);
+                    self.generate(*right);
+                    println!("  pop rdi");
+                    println!("  pop rax");
+                    println!("  imul rdi, {}", type_.size());
+                    println!("  add rax, rdi");
+                    println!("  push rax");
+                }
+                _ => {
+                    panic!("Unexpected left operand on add pointer operator.");
+                }
+            },
+            NodeKind::SubtractPointer { left, right } => match left.type_.clone() {
+                Type::Pointer { type_ } | Type::Array { type_, .. } => {
+                    self.generate(*left);
+                    self.generate(*right);
+                    println!("  pop rdi");
+                    println!("  pop rax");
+                    println!("  imul rdi, {}", type_.size());
+                    println!("  sub rax, rdi");
+                    println!("  push rax");
+                }
+                _ => {
+                    panic!("Unexpected left operand on add pointer operator.");
+                }
+            },
             NodeKind::Assign { left, right } => {
                 self.generate_address_of(*left);
                 self.generate(*right);
                 self.store();
             }
-            NodeKind::LocalVariable { .. } => {
-                self.generate_address_of(node);
-                self.load();
-            }
+            NodeKind::LocalVariable { .. } => match node.type_.clone() {
+                Type::Array { .. } => {
+                    self.generate_address_of(node);
+                }
+                _ => {
+                    self.generate_address_of(node);
+                    self.load();
+                }
+            },
             NodeKind::Return { value } => {
                 self.generate(*value);
                 self.return_();
@@ -142,10 +181,18 @@ impl CodeGenerator {
     }
 
     fn generate_address_of(&self, node: Node) {
-        if let NodeKind::LocalVariable { local_variable } = node.kind {
-            println!("  mov rax, rbp");
-            println!("  sub rax, {}", local_variable.offset);
-            println!("  push rax");
+        match node.kind {
+            NodeKind::Dereference { value } => {
+                generate(*value);
+            }
+            NodeKind::LocalVariable { local_variable } => {
+                println!("  mov rax, rbp");
+                println!("  sub rax, {}", local_variable.offset);
+                println!("  push rax");
+            }
+            _ => {
+                panic!("{:?}", node);
+            }
         }
     }
 

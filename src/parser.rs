@@ -13,7 +13,7 @@ pub enum NodeKind {
         function_definitions: Vec<Node>,
     },
     Integer {
-        value: u32,
+        value: i32,
     },
     Reference {
         value: Box<Node>,
@@ -25,7 +25,15 @@ pub enum NodeKind {
         left: Box<Node>,
         right: Box<Node>,
     },
+    AddPointer {
+        left: Box<Node>,
+        right: Box<Node>,
+    },
     Subtract {
+        left: Box<Node>,
+        right: Box<Node>,
+    },
+    SubtractPointer {
         left: Box<Node>,
         right: Box<Node>,
     },
@@ -58,9 +66,7 @@ pub enum NodeKind {
         statements: Vec<Node>,
     },
     LocalVariableDeclaration,
-    Type {
-        type_: Type,
-    },
+    Type,
     FunctionDefinition {
         name: String,
         block: Box<Node>,
@@ -70,31 +76,267 @@ pub enum NodeKind {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Node {
     pub kind: NodeKind,
+    pub type_: Type,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+impl Node {
+    fn new_program(function_definitions: Vec<Node>) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::Program {
+                function_definitions,
+            },
+        }
+    }
+
+    fn new_function_definition(name: String, block: Node) -> Self {
+        Self {
+            type_: Type::Function,
+            kind: NodeKind::FunctionDefinition {
+                name,
+                block: Box::new(block),
+            },
+        }
+    }
+
+    fn new_block(statements: Vec<Node>) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::Block { statements },
+        }
+    }
+
+    fn new_for(
+        initialization: Option<Node>,
+        condition: Option<Node>,
+        afterthrough: Option<Node>,
+        statement: Node,
+    ) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::For {
+                initialization: initialization.map(Box::new),
+                condition: condition.map(Box::new),
+                afterthrough: afterthrough.map(Box::new),
+                statement: Box::new(statement),
+            },
+        }
+    }
+
+    fn new_return(value: Node) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::Return {
+                value: Box::new(value),
+            },
+        }
+    }
+
+    fn new_if(condition: Node, statement_true: Node) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::If {
+                condition: Box::new(condition),
+                statement_true: Box::new(statement_true),
+                statement_false: None,
+            },
+        }
+    }
+
+    fn new_if_else(condition: Node, statement_true: Node, statement_false: Node) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::If {
+                condition: Box::new(condition),
+                statement_true: Box::new(statement_true),
+                statement_false: Some(Box::new(statement_false)),
+            },
+        }
+    }
+
+    fn new_while(condition: Node, statement: Node) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::While {
+                condition: Box::new(condition),
+                statement: Box::new(statement),
+            },
+        }
+    }
+
+    fn new_local_variable_declaration() -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::LocalVariableDeclaration,
+        }
+    }
+
+    fn new_type(type_: Type) -> Self {
+        Self {
+            type_,
+            kind: NodeKind::Type,
+        }
+    }
+
+    fn new_assign(left: Node, right: Node) -> Self {
+        Self {
+            type_: right.type_.clone(),
+            kind: NodeKind::Assign {
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+        }
+    }
+
+    fn new_add(left: Node, right: Node) -> Result<Self, ParseError> {
+        if left.type_.pointable() {
+            if right.type_.pointable() {
+                Err(ParseError::UnexpectedAddOperand { left, right })
+            } else {
+                Ok(Self {
+                    type_: left.type_.clone(),
+                    kind: NodeKind::AddPointer {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                })
+            }
+        } else if right.type_.pointable() {
+            Ok(Self {
+                type_: right.type_.clone(),
+                kind: NodeKind::AddPointer {
+                    left: Box::new(right),
+                    right: Box::new(left),
+                },
+            })
+        } else {
+            Ok(Self {
+                type_: left.type_.clone(),
+                kind: NodeKind::Add {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+            })
+        }
+    }
+
+    fn new_subtract(left: Node, right: Node) -> Result<Self, ParseError> {
+        if left.type_.pointable() {
+            if right.type_.pointable() {
+                Err(ParseError::UnexpectedSubtractOperand { left, right })
+            } else {
+                Ok(Self {
+                    type_: left.type_.clone(),
+                    kind: NodeKind::SubtractPointer {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                })
+            }
+        } else if right.type_.pointable() {
+            Ok(Self {
+                type_: right.type_.clone(),
+                kind: NodeKind::SubtractPointer {
+                    left: Box::new(right),
+                    right: Box::new(left),
+                },
+            })
+        } else {
+            Ok(Self {
+                type_: left.type_.clone(),
+                kind: NodeKind::Subtract {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+            })
+        }
+    }
+
+    fn new_reference(value: Node) -> Self {
+        Self {
+            type_: Type::Pointer {
+                type_: Box::new(value.type_.clone()),
+            },
+            kind: NodeKind::Reference {
+                value: Box::new(value),
+            },
+        }
+    }
+
+    fn new_dereference(value: Node) -> Result<Self, ParseError> {
+        if value.type_.pointable() {
+            Ok(Self {
+                type_: value.type_.clone(),
+                kind: NodeKind::Dereference {
+                    value: Box::new(value),
+                },
+            })
+        } else {
+            Err(ParseError::UnexpectedDereferenceOperand { node: value })
+        }
+    }
+
+    fn new_local_variable(local_variable: LocalVariable) -> Self {
+        Self {
+            type_: local_variable.type_.clone(),
+            kind: NodeKind::LocalVariable { local_variable },
+        }
+    }
+
+    fn new_integer(value: i32) -> Self {
+        Self {
+            type_: Type::Integer,
+            kind: NodeKind::Integer { value },
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type {
     Integer,
-    Pointer(Box<Type>),
+    Pointer { type_: Box<Type> },
+    Array { type_: Box<Type>, length: u32 },
+    Function,
+    Void,
+}
+
+impl Type {
+    pub fn size(&self) -> u32 {
+        match self {
+            Type::Void => 0,
+            Type::Integer => 8,
+            Type::Pointer { .. } | Type::Function => 16,
+            Type::Array { type_, length } => type_.size() * length,
+        }
+    }
+
+    fn pointable(&self) -> bool {
+        match self {
+            Type::Pointer { .. } | Type::Array { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LocalVariable {
     pub name: String,
-    pub offset: usize,
+    pub offset: u32,
+    pub type_: Type,
 }
 
 #[derive(Default)]
 struct Environment {
     local_variables: HashMap<String, LocalVariable>,
-    offset: usize,
+    offset: u32,
 }
 
 impl Environment {
-    fn add_local_variable(&mut self, name: String) -> LocalVariable {
-        self.offset += 8;
+    fn add_local_variable(&mut self, name: String, type_: Type) -> LocalVariable {
+        self.offset += type_.size();
         let local_variable = LocalVariable {
             name: name.clone(),
+            type_: type_.clone(),
             offset: self.offset,
         };
         self.local_variables
@@ -102,8 +344,8 @@ impl Environment {
         local_variable
     }
 
-    fn find_local_variable_by(&self, name: &str) -> Option<LocalVariable> {
-        self.local_variables.get(name).map(|v| v.clone())
+    fn find_local_variable_by(&self, name: &str) -> Option<&LocalVariable> {
+        self.local_variables.get(name)
     }
 }
 
@@ -117,9 +359,23 @@ pub enum ParseError {
     NotIdentifierToken {
         actual: Token,
     },
+    NotIntegerToken {
+        actual: Token,
+    },
     UnexpectedEos,
     UndefinedLocalVariable {
         name: String,
+    },
+    UnexpectedAddOperand {
+        left: Node,
+        right: Node,
+    },
+    UnexpectedSubtractOperand {
+        left: Node,
+        right: Node,
+    },
+    UnexpectedDereferenceOperand {
+        node: Node,
     },
 }
 
@@ -152,7 +408,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   | "if" "(" expression ")" statement ("else" statement)?
     //   | "while" "(" expression ")" statement
     //   | "for" "(" expression? ";" expression? ";" expression? ")" statement
-    //   | type identifier ";"
+    //   | type identifier type_postfix ";"
     //   | block
     //   | expression ";"
     //
@@ -179,22 +435,24 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   | "-" primary
     //   | "&" unary
     //   | "*" unary
-    //   | primary
+    //   | primary ("[" expression "]")*
     //
     // primary
     //   = number
     //   | identifier
     //   | "(" expression ")"
+    //
+    // type
+    //   = "int" ("*")*
+    //
+    // type_postfix
+    //   = ("[" number "]")*
     fn parse(&mut self) -> ParseResult {
         let mut function_definitions = Vec::new();
         while self.tokens.peek().is_some() {
             function_definitions.push(self.parse_function_definition()?);
         }
-        Ok(Node {
-            kind: NodeKind::Program {
-                function_definitions,
-            },
-        })
+        Ok(Node::new_program(function_definitions))
     }
 
     fn parse_function_definition(&mut self) -> ParseResult {
@@ -207,12 +465,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         {
             self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisLeft))?;
             self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisRight))?;
-            Ok(Node {
-                kind: NodeKind::FunctionDefinition {
-                    name,
-                    block: Box::new(self.parse_block()?),
-                },
-            })
+            Ok(Node::new_function_definition(name, self.parse_block()?))
         } else {
             Err(ParseError::NotIdentifierToken {
                 actual: self.tokens.next().unwrap(),
@@ -223,13 +476,11 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     fn parse_block(&mut self) -> ParseResult {
         let mut statements = Vec::new();
         self.consume_token_of(TokenKind::Symbol(Symbol::BraceLeft))?;
-        while !self.has_next_token(TokenKind::Symbol(Symbol::BraceRight)) {
+        while !self.has_next_token_of(TokenKind::Symbol(Symbol::BraceRight)) {
             statements.push(self.parse_statement()?);
         }
         self.consume_token_of(TokenKind::Symbol(Symbol::BraceRight))?;
-        Ok(Node {
-            kind: NodeKind::Block { statements },
-        })
+        Ok(Node::new_block(statements))
     }
 
     fn parse_statement(&mut self) -> ParseResult {
@@ -256,12 +507,12 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let mut initialization = None;
         let mut condition = None;
         let mut afterthrough = None;
-        if !self.has_next_token(TokenKind::Symbol(Symbol::Semicolon)) {
-            initialization = Some(Box::new(self.parse_expression()?));
+        if !self.has_next_token_of(TokenKind::Symbol(Symbol::Semicolon)) {
+            initialization = Some(self.parse_expression()?);
         }
         self.consume_token_of(TokenKind::Symbol(Symbol::Semicolon))?;
-        if !self.has_next_token(TokenKind::Symbol(Symbol::Semicolon)) {
-            condition = Some(Box::new(self.parse_expression()?));
+        if !self.has_next_token_of(TokenKind::Symbol(Symbol::Semicolon)) {
+            condition = Some(self.parse_expression()?);
         }
         self.consume_token_of(TokenKind::Symbol(Symbol::Semicolon))?;
         match self.tokens.peek() {
@@ -270,29 +521,23 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 ..
             }) => {}
             _ => {
-                afterthrough = Some(Box::new(self.parse_expression()?));
+                afterthrough = Some(self.parse_expression()?);
             }
         }
         self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisRight))?;
-        Ok(Node {
-            kind: NodeKind::For {
-                initialization,
-                condition,
-                afterthrough,
-                statement: Box::new(self.parse_statement()?),
-            },
-        })
+        Ok(Node::new_for(
+            initialization,
+            condition,
+            afterthrough,
+            self.parse_statement()?,
+        ))
     }
 
     fn parse_statement_return(&mut self) -> ParseResult {
         self.consume_token_of(TokenKind::Keyword(Keyword::Return))?;
         let expression = self.parse_expression()?;
         self.consume_token_of(TokenKind::Symbol(Symbol::Semicolon))?;
-        Ok(Node {
-            kind: NodeKind::Return {
-                value: Box::new(expression),
-            },
-        })
+        Ok(Node::new_return(expression))
     }
 
     fn parse_statement_if(&mut self) -> ParseResult {
@@ -300,28 +545,20 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisLeft))?;
         let condition = self.parse_expression()?;
         self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisRight))?;
-        let statement = self.parse_statement()?;
+        let statement_true = self.parse_statement()?;
         match self.tokens.peek() {
             Some(Token {
                 kind: TokenKind::Keyword(Keyword::Else),
                 ..
             }) => {
                 self.consume_token_of(TokenKind::Keyword(Keyword::Else))?;
-                Ok(Node {
-                    kind: NodeKind::If {
-                        condition: Box::new(condition),
-                        statement_true: Box::new(statement),
-                        statement_false: Some(Box::new(self.parse_statement()?)),
-                    },
-                })
+                Ok(Node::new_if_else(
+                    condition,
+                    statement_true,
+                    self.parse_statement()?,
+                ))
             }
-            _ => Ok(Node {
-                kind: NodeKind::If {
-                    condition: Box::new(condition),
-                    statement_true: Box::new(statement),
-                    statement_false: None,
-                },
-            }),
+            _ => Ok(Node::new_if(condition, statement_true)),
         }
     }
 
@@ -331,47 +568,50 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         let condition = self.parse_expression()?;
         self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisRight))?;
         let statement = self.parse_statement()?;
-        Ok(Node {
-            kind: NodeKind::While {
-                condition: Box::new(condition),
-                statement: Box::new(statement),
-            },
-        })
+        Ok(Node::new_while(condition, statement))
     }
 
     fn parse_statement_local_variable_declaration(&mut self) -> ParseResult {
         self.parse_type()?;
-        match self.tokens.next() {
-            Some(token) => match token {
-                Token {
-                    kind: TokenKind::Identifier(name),
-                    ..
-                } => {
-                    self.environment.add_local_variable(name);
-                    self.consume_token_of(TokenKind::Symbol(Symbol::Semicolon))?;
-                    Ok(Node {
-                        kind: NodeKind::LocalVariableDeclaration,
-                    })
+        let token = self.consume_token()?;
+        match token.kind {
+            TokenKind::Identifier(name) => {
+                let mut type_ = Type::Integer;
+                while self.has_next_token_of(TokenKind::Symbol(Symbol::BracketLeft)) {
+                    self.consume_token_of(TokenKind::Symbol(Symbol::BracketLeft))?;
+                    let token = self.consume_token()?;
+                    if let Token {
+                        kind: TokenKind::Integer(length),
+                        ..
+                    } = token
+                    {
+                        type_ = Type::Array {
+                            type_: Box::new(type_),
+                            length,
+                        };
+                    } else {
+                        return Err(ParseError::NotIntegerToken { actual: token });
+                    }
+                    self.consume_token_of(TokenKind::Symbol(Symbol::BracketRight))?;
                 }
-                _ => Err(ParseError::UnexpectedToken {
-                    expected: None,
-                    actual: token,
-                }),
-            },
-            _ => Err(ParseError::UnexpectedEos),
+                self.environment.add_local_variable(name, type_);
+                self.consume_token_of(TokenKind::Symbol(Symbol::Semicolon))?;
+                Ok(Node::new_local_variable_declaration())
+            }
+            _ => Err(ParseError::NotIdentifierToken { actual: token }),
         }
     }
 
     fn parse_type(&mut self) -> ParseResult {
         self.consume_token_of(TokenKind::Keyword(Keyword::Integer))?;
         let mut type_ = Type::Integer;
-        while self.has_next_token(TokenKind::Symbol(Symbol::Asterisk)) {
-            type_ = Type::Pointer(Box::new(type_));
+        while self.has_next_token_of(TokenKind::Symbol(Symbol::Asterisk)) {
+            type_ = Type::Pointer {
+                type_: Box::new(type_),
+            };
             self.consume_token()?;
         }
-        Ok(Node {
-            kind: NodeKind::Type { type_ },
-        })
+        Ok(Node::new_type(type_))
     }
 
     fn parse_statement_expression(&mut self) -> ParseResult {
@@ -393,12 +633,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     ..
                 } => {
                     self.tokens.next();
-                    node = Node {
-                        kind: NodeKind::Assign {
-                            left: Box::new(node),
-                            right: Box::new(self.parse_assign()?),
-                        },
-                    };
+                    node = Node::new_assign(node, self.parse_assign()?);
                 }
                 _ => {}
             }
@@ -415,26 +650,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                     ..
                 } => {
                     self.tokens.next();
-                    let right = self.parse_multiply()?;
-                    node = Node {
-                        kind: NodeKind::Add {
-                            left: Box::new(node),
-                            right: Box::new(right),
-                        },
-                    };
+                    node = Node::new_add(node, self.parse_multiply()?)?;
                 }
                 Token {
                     kind: TokenKind::Symbol(Symbol::Minus),
                     ..
                 } => {
                     self.tokens.next();
-                    let right = self.parse_multiply()?;
-                    node = Node {
-                        kind: NodeKind::Subtract {
-                            left: Box::new(node),
-                            right: Box::new(right),
-                        },
-                    };
+                    node = Node::new_subtract(node, self.parse_multiply()?)?;
                 }
                 _ => {
                     break;
@@ -453,32 +676,29 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             match token.kind {
                 TokenKind::Symbol(Symbol::Minus) => {
                     self.consume_token_of(TokenKind::Symbol(Symbol::Minus))?;
-                    Ok(Node {
-                        kind: NodeKind::Subtract {
-                            left: Box::new(Node {
-                                kind: NodeKind::Integer { value: 0 },
-                            }),
-                            right: Box::new(self.parse_primary()?),
-                        },
-                    })
+                    Ok(Node::new_subtract(
+                        Node::new_integer(0),
+                        self.parse_primary()?,
+                    )?)
                 }
                 TokenKind::Symbol(Symbol::Ampersand) => {
                     self.consume_token_of(TokenKind::Symbol(Symbol::Ampersand))?;
-                    Ok(Node {
-                        kind: NodeKind::Reference {
-                            value: Box::new(self.parse_unary()?),
-                        },
-                    })
+                    Ok(Node::new_reference(self.parse_unary()?))
                 }
                 TokenKind::Symbol(Symbol::Asterisk) => {
                     self.consume_token_of(TokenKind::Symbol(Symbol::Asterisk))?;
-                    Ok(Node {
-                        kind: NodeKind::Dereference {
-                            value: Box::new(self.parse_unary()?),
-                        },
-                    })
+                    Ok(Node::new_dereference(self.parse_unary()?)?)
                 }
-                _ => self.parse_primary(),
+                _ => {
+                    let mut node = self.parse_primary()?;
+                    while self.has_next_token_of(TokenKind::Symbol(Symbol::BracketLeft)) {
+                        self.consume_token_of(TokenKind::Symbol(Symbol::BracketLeft))?;
+                        let index_node = self.parse_expression()?;
+                        self.consume_token_of(TokenKind::Symbol(Symbol::BracketRight))?;
+                        node = Node::new_dereference(Node::new_add(node, index_node)?)?;
+                    }
+                    Ok(node)
+                }
             }
         } else {
             Err(ParseError::UnexpectedEos)
@@ -491,17 +711,13 @@ impl<T: Iterator<Item = Token>> Parser<T> {
             Token {
                 kind: TokenKind::Integer(value),
                 ..
-            } => Ok(Node {
-                kind: NodeKind::Integer { value },
-            }),
+            } => Ok(Node::new_integer(value as i32)),
             Token {
                 kind: TokenKind::Identifier(name),
                 ..
             } => {
                 if let Some(local_variable) = self.environment.find_local_variable_by(&name) {
-                    Ok(Node {
-                        kind: NodeKind::LocalVariable { local_variable },
-                    })
+                    Ok(Node::new_local_variable(local_variable.clone()))
                 } else {
                     Err(ParseError::UndefinedLocalVariable { name })
                 }
@@ -521,10 +737,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    fn consume_token_of(&mut self, kind: TokenKind) -> Result<(), ParseError> {
+    fn consume_token_of(&mut self, kind: TokenKind) -> Result<Token, ParseError> {
         if let Some(token) = self.tokens.next() {
             if token.kind == kind {
-                Ok(())
+                Ok(token)
             } else {
                 Err(ParseError::UnexpectedToken {
                     expected: Some(kind),
@@ -536,7 +752,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    fn has_next_token(&mut self, kind: TokenKind) -> bool {
+    fn has_next_token_of(&mut self, kind: TokenKind) -> bool {
         if let Some(token) = self.tokens.peek() {
             token.kind == kind
         } else {
@@ -547,106 +763,30 @@ impl<T: Iterator<Item = Token>> Parser<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse, Node, NodeKind, ParseError};
+    use super::parse;
     use crate::tokenizer::tokenize;
 
     #[test]
     fn test_parse_undefined_variable() {
         let tokens = tokenize("int main() { return a; }");
-        assert_eq!(
-            parse(tokens),
-            Err(ParseError::UndefinedLocalVariable {
-                name: "a".to_string()
-            })
-        )
+        assert!(parse(tokens).is_err());
     }
 
     #[test]
     fn test_parse_if() {
         let tokens = tokenize("int main() { if (1) { return 2; } else { return 3; } }");
-        assert_eq!(
-            parse(tokens),
-            Ok(Node {
-                kind: NodeKind::Program {
-                    function_definitions: vec![Node {
-                        kind: NodeKind::FunctionDefinition {
-                            name: "main".to_string(),
-                            block: Box::new(Node {
-                                kind: NodeKind::Block {
-                                    statements: vec![Node {
-                                        kind: NodeKind::If {
-                                            condition: Box::new(Node {
-                                                kind: NodeKind::Integer { value: 1 }
-                                            }),
-                                            statement_true: Box::new(Node {
-                                                kind: NodeKind::Block {
-                                                    statements: vec![Node {
-                                                        kind: NodeKind::Return {
-                                                            value: Box::new(Node {
-                                                                kind: NodeKind::Integer {
-                                                                    value: 2
-                                                                }
-                                                            })
-                                                        }
-                                                    }],
-                                                }
-                                            }),
-                                            statement_false: Some(Box::new(Node {
-                                                kind: NodeKind::Block {
-                                                    statements: vec![Node {
-                                                        kind: NodeKind::Return {
-                                                            value: Box::new(Node {
-                                                                kind: NodeKind::Integer {
-                                                                    value: 3
-                                                                }
-                                                            })
-                                                        }
-                                                    }],
-                                                }
-                                            }))
-                                        },
-                                    }]
-                                }
-                            }),
-                        },
-                    }]
-                }
-            })
-        )
+        assert!(parse(tokens).is_ok());
     }
 
     #[test]
     fn test_parse_while() {
         let tokens = tokenize("int main() { while(1) return 2; }");
-        assert_eq!(
-            parse(tokens),
-            Ok(Node {
-                kind: NodeKind::Program {
-                    function_definitions: vec![Node {
-                        kind: NodeKind::FunctionDefinition {
-                            name: "main".to_string(),
-                            block: Box::new(Node {
-                                kind: NodeKind::Block {
-                                    statements: vec![Node {
-                                        kind: NodeKind::While {
-                                            condition: Box::new(Node {
-                                                kind: NodeKind::Integer { value: 1 }
-                                            }),
-                                            statement: Box::new(Node {
-                                                kind: NodeKind::Return {
-                                                    value: Box::new(Node {
-                                                        kind: NodeKind::Integer { value: 2 }
-                                                    }),
-                                                }
-                                            }),
-                                        }
-                                    }],
-                                }
-                            })
-                        }
-                    }]
-                }
-            })
-        )
+        assert!(parse(tokens).is_ok());
+    }
+
+    #[test]
+    fn test_parse_array() {
+        let tokens = tokenize("int main() { int a[3]; a[0] = 1; return a[0]; }");
+        assert!(parse(tokens).is_ok());
     }
 }

@@ -11,6 +11,8 @@ pub enum Symbol {
     Asterisk,
     BraceLeft,
     BraceRight,
+    BracketLeft,
+    BracketRight,
     Equal,
     Minus,
     ParenthesisLeft,
@@ -206,6 +208,17 @@ impl Iterator for Tokens<'_> {
                 '}' => {
                     self.consume_character();
                     token = Some(Token::new(TokenKind::Symbol(Symbol::BraceRight), position));
+                }
+                '[' => {
+                    self.consume_character();
+                    token = Some(Token::new(TokenKind::Symbol(Symbol::BracketLeft), position));
+                }
+                ']' => {
+                    self.consume_character();
+                    token = Some(Token::new(
+                        TokenKind::Symbol(Symbol::BracketRight),
+                        position,
+                    ));
                 }
                 '"' => {
                     let value = self.consume_string_literal();
@@ -427,6 +440,20 @@ mod tests {
                 Token::new(TokenKind::Keyword(Keyword::Integer), Position::new(1, 1)),
                 Token::new(TokenKind::Identifier("a".to_string()), Position::new(5, 1)),
                 Token::new(TokenKind::Symbol(Symbol::Semicolon), Position::new(6, 1)),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_array() {
+        let tokens: Vec<Token> = tokenize("a[0]").collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::new(TokenKind::Identifier("a".to_string()), Position::new(1, 1)),
+                Token::new(TokenKind::Symbol(Symbol::BracketLeft), Position::new(2, 1)),
+                Token::new(TokenKind::Integer(0), Position::new(3, 1)),
+                Token::new(TokenKind::Symbol(Symbol::BracketRight), Position::new(4, 1)),
             ]
         );
     }
