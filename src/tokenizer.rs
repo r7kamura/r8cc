@@ -23,6 +23,7 @@ pub enum Symbol {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Keyword {
+    Char,
     Else,
     For,
     If,
@@ -237,6 +238,10 @@ impl Iterator for Tokens<'_> {
                     } else if character.is_ascii_alphabetic() {
                         let name = self.consume_identifier();
                         match &*name {
+                            "char" => {
+                                token =
+                                    Some(Token::new(TokenKind::Keyword(Keyword::Char), position));
+                            }
                             "if" => {
                                 token = Some(Token::new(TokenKind::Keyword(Keyword::If), position));
                             }

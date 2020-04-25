@@ -11,9 +11,14 @@ pub fn parse<T: Iterator<Item = Token>>(tokens: T) -> ParseResult {
 pub enum NodeKind {
     Program {
         function_definitions: Vec<Node>,
+        global_variable_declarations: Vec<Node>,
+        strings: Vec<String>,
     },
     Integer {
         value: i32,
+    },
+    String {
+        index: usize,
     },
     Reference {
         value: Box<Node>,
@@ -66,9 +71,12 @@ pub enum NodeKind {
         statements: Vec<Node>,
     },
     LocalVariableDeclaration,
-    Type,
+    GlobalVariableDeclaration {
+        local_variable: LocalVariable,
+    },
     FunctionDefinition {
         name: String,
+        local_variables: HashMap<String, LocalVariable>,
         block: Box<Node>,
     },
 }
@@ -80,22 +88,40 @@ pub struct Node {
 }
 
 impl Node {
-    fn new_program(function_definitions: Vec<Node>) -> Self {
+    fn new_program(
+        function_definitions: Vec<Node>,
+        global_variable_declarations: Vec<Node>,
+        strings: Vec<String>,
+    ) -> Self {
         Self {
             type_: Type::Void,
             kind: NodeKind::Program {
                 function_definitions,
+                global_variable_declarations,
+                strings,
             },
         }
     }
 
-    fn new_function_definition(name: String, block: Node) -> Self {
+    fn new_function_definition(
+        name: String,
+        local_variables: HashMap<String, LocalVariable>,
+        block: Node,
+    ) -> Self {
         Self {
             type_: Type::Function,
             kind: NodeKind::FunctionDefinition {
                 name,
+                local_variables,
                 block: Box::new(block),
             },
+        }
+    }
+
+    fn new_global_variable_declaration(local_variable: LocalVariable) -> Self {
+        Self {
+            type_: Type::Void,
+            kind: NodeKind::GlobalVariableDeclaration { local_variable },
         }
     }
 
@@ -168,13 +194,6 @@ impl Node {
         Self {
             type_: Type::Void,
             kind: NodeKind::LocalVariableDeclaration,
-        }
-    }
-
-    fn new_type(type_: Type) -> Self {
-        Self {
-            type_,
-            kind: NodeKind::Type,
         }
     }
 
@@ -289,13 +308,22 @@ impl Node {
             kind: NodeKind::Integer { value },
         }
     }
+
+    fn new_string(index: usize) -> Self {
+        Self {
+            type_: Type::String,
+            kind: NodeKind::String { index },
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type {
+    Char,
     Integer,
     Pointer { type_: Box<Type> },
     Array { type_: Box<Type>, length: u32 },
+    String,
     Function,
     Void,
 }
@@ -304,8 +332,9 @@ impl Type {
     pub fn size(&self) -> u32 {
         match self {
             Type::Void => 0,
+            Type::Char => 1,
             Type::Integer => 8,
-            Type::Pointer { .. } | Type::Function => 16,
+            Type::Pointer { .. } | Type::String { .. } | Type::Function => 16,
             Type::Array { type_, length } => type_.size() * length,
         }
     }
@@ -323,29 +352,79 @@ pub struct LocalVariable {
     pub name: String,
     pub offset: u32,
     pub type_: Type,
+    pub global: bool,
 }
 
-#[derive(Default)]
+impl LocalVariable {
+    fn new_local_variable(name: String, type_: Type, offset: u32) -> Self {
+        Self {
+            name,
+            type_,
+            offset,
+            global: false,
+        }
+    }
+
+    fn new_global_variable(name: String, type_: Type, offset: u32) -> Self {
+        Self {
+            name,
+            type_,
+            offset,
+            global: true,
+        }
+    }
+}
+
+#[derive(Clone)]
 struct Environment {
     local_variables: HashMap<String, LocalVariable>,
     offset: u32,
+    parent: Option<Box<Environment>>,
 }
 
 impl Environment {
+    fn new() -> Self {
+        Self {
+            local_variables: HashMap::new(),
+            offset: 0,
+            parent: None,
+        }
+    }
+
+    fn new_with_parent(parent: Environment) -> Self {
+        Self {
+            local_variables: HashMap::new(),
+            offset: 0,
+            parent: Some(Box::new(parent)),
+        }
+    }
+
     fn add_local_variable(&mut self, name: String, type_: Type) -> LocalVariable {
         self.offset += type_.size();
-        let local_variable = LocalVariable {
-            name: name.clone(),
-            type_: type_.clone(),
-            offset: self.offset,
-        };
+        let local_variable =
+            LocalVariable::new_local_variable(name.clone(), type_.clone(), self.offset);
+        self.local_variables
+            .insert(name.clone(), local_variable.clone());
+        local_variable
+    }
+
+    fn add_global_variable(&mut self, name: String, type_: Type) -> LocalVariable {
+        let local_variable =
+            LocalVariable::new_global_variable(name.clone(), type_.clone(), self.offset);
         self.local_variables
             .insert(name.clone(), local_variable.clone());
         local_variable
     }
 
     fn find_local_variable_by(&self, name: &str) -> Option<&LocalVariable> {
-        self.local_variables.get(name)
+        let variable = self.local_variables.get(name);
+        if variable.is_some() {
+            variable
+        } else if let Some(environment) = &self.parent {
+            environment.find_local_variable_by(name)
+        } else {
+            None
+        }
     }
 }
 
@@ -384,21 +463,24 @@ type ParseResult = Result<Node, ParseError>;
 struct Parser<T: Iterator<Item = Token>> {
     environment: Environment,
     tokens: Peekable<T>,
+    strings: Vec<String>,
 }
 
 impl<T: Iterator<Item = Token>> Parser<T> {
     fn new(tokens: T) -> Self {
         Parser {
             tokens: tokens.peekable(),
-            environment: Environment::default(),
+            environment: Environment::new(),
+            strings: Vec::new(),
         }
     }
 
     // program
-    //   = function_definition*
+    //   = function_definition_or_global_variable_declaration*
     //
-    // function_definition
+    // function_definition_or_global_variable_declaration
     //   = type identifier "(" ")" block
+    //   | type identifier ";"
     //
     // block
     //   = "{" statement* "}"
@@ -439,6 +521,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //
     // primary
     //   = number
+    //   | string
     //   | identifier
     //   | "(" expression ")"
     //
@@ -449,23 +532,53 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     //   = ("[" number "]")*
     fn parse(&mut self) -> ParseResult {
         let mut function_definitions = Vec::new();
+        let mut global_variable_declarations = Vec::new();
         while self.tokens.peek().is_some() {
-            function_definitions.push(self.parse_function_definition()?);
+            let node = self.parse_function_definition_or_global_variable_declaration()?;
+            match node.kind {
+                NodeKind::FunctionDefinition { .. } => {
+                    function_definitions.push(node);
+                }
+                NodeKind::GlobalVariableDeclaration { .. } => {
+                    global_variable_declarations.push(node);
+                }
+                _ => {}
+            }
         }
-        Ok(Node::new_program(function_definitions))
+        Ok(Node::new_program(
+            function_definitions,
+            global_variable_declarations,
+            self.strings.clone(),
+        ))
     }
 
-    fn parse_function_definition(&mut self) -> ParseResult {
-        self.parse_type()?;
-        let token = self.consume_token()?;
+    fn parse_function_definition_or_global_variable_declaration(&mut self) -> ParseResult {
+        let type_ = self.parse_type()?;
+        let identifier = self.consume_token()?;
         if let Token {
             kind: TokenKind::Identifier(name),
             ..
-        } = token
+        } = identifier
         {
-            self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisLeft))?;
-            self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisRight))?;
-            Ok(Node::new_function_definition(name, self.parse_block()?))
+            if self.has_next_token_of(TokenKind::Symbol(Symbol::ParenthesisLeft)) {
+                self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisLeft))?;
+                self.consume_token_of(TokenKind::Symbol(Symbol::ParenthesisRight))?;
+                let parent = self.environment.clone();
+                self.environment = Environment::new_with_parent(parent.clone());
+                let block = self.parse_block()?;
+                let result = Ok(Node::new_function_definition(
+                    name,
+                    self.environment.local_variables.clone(),
+                    block,
+                ));
+                self.environment = parent;
+                result
+            } else {
+                self.consume_token_of(TokenKind::Symbol(Symbol::Semicolon))?;
+                Ok(Node::new_global_variable_declaration(
+                    self.environment.add_global_variable(name, type_),
+                ))
+            }
         } else {
             Err(ParseError::NotIdentifierToken {
                 actual: self.tokens.next().unwrap(),
@@ -490,7 +603,7 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 TokenKind::Keyword(Keyword::If) => self.parse_statement_if(),
                 TokenKind::Keyword(Keyword::Return) => self.parse_statement_return(),
                 TokenKind::Keyword(Keyword::While) => self.parse_statement_while(),
-                TokenKind::Keyword(Keyword::Integer) => {
+                TokenKind::Keyword(Keyword::Integer) | TokenKind::Keyword(Keyword::Char) => {
                     self.parse_statement_local_variable_declaration()
                 }
                 TokenKind::Symbol(Symbol::BraceLeft) => self.parse_block(),
@@ -572,11 +685,10 @@ impl<T: Iterator<Item = Token>> Parser<T> {
     }
 
     fn parse_statement_local_variable_declaration(&mut self) -> ParseResult {
-        self.parse_type()?;
+        let mut type_ = self.parse_type()?;
         let token = self.consume_token()?;
         match token.kind {
             TokenKind::Identifier(name) => {
-                let mut type_ = Type::Integer;
                 while self.has_next_token_of(TokenKind::Symbol(Symbol::BracketLeft)) {
                     self.consume_token_of(TokenKind::Symbol(Symbol::BracketLeft))?;
                     let token = self.consume_token()?;
@@ -602,16 +714,25 @@ impl<T: Iterator<Item = Token>> Parser<T> {
         }
     }
 
-    fn parse_type(&mut self) -> ParseResult {
-        self.consume_token_of(TokenKind::Keyword(Keyword::Integer))?;
-        let mut type_ = Type::Integer;
+    fn parse_type(&mut self) -> Result<Type, ParseError> {
+        let token = self.consume_token()?;
+        let mut type_ = match token.kind {
+            TokenKind::Keyword(Keyword::Integer) => Type::Integer,
+            TokenKind::Keyword(Keyword::Char) => Type::Char,
+            _ => {
+                return Err(ParseError::UnexpectedToken {
+                    expected: None,
+                    actual: token,
+                });
+            }
+        };
         while self.has_next_token_of(TokenKind::Symbol(Symbol::Asterisk)) {
             type_ = Type::Pointer {
                 type_: Box::new(type_),
             };
             self.consume_token()?;
         }
-        Ok(Node::new_type(type_))
+        Ok(type_)
     }
 
     fn parse_statement_expression(&mut self) -> ParseResult {
@@ -713,6 +834,14 @@ impl<T: Iterator<Item = Token>> Parser<T> {
                 ..
             } => Ok(Node::new_integer(value as i32)),
             Token {
+                kind: TokenKind::String(value),
+                ..
+            } => {
+                let index = self.strings.len();
+                self.strings.push(value);
+                Ok(Node::new_string(index))
+            }
+            Token {
                 kind: TokenKind::Identifier(name),
                 ..
             } => {
@@ -788,5 +917,26 @@ mod tests {
     fn test_parse_array() {
         let tokens = tokenize("int main() { int a[3]; a[0] = 1; return a[0]; }");
         assert!(parse(tokens).is_ok());
+    }
+
+    #[test]
+    fn test_parse_char() {
+        let tokens = tokenize("int main() { char a; }");
+        let result = parse(tokens);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_global_variable() {
+        let tokens = tokenize("int a; int main() { a = 1; return a; }");
+        let result = parse(tokens);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_string() {
+        let tokens = tokenize("int main() { char *a; a = \"abc\"; return 1; }");
+        let result = parse(tokens);
+        assert!(result.is_ok());
     }
 }

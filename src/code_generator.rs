@@ -14,11 +14,33 @@ impl CodeGenerator {
         match node.kind {
             NodeKind::Program {
                 function_definitions,
+                global_variable_declarations,
+                strings,
             } => {
                 println!(".intel_syntax noprefix");
+                println!(".data");
+                for global_variable_declaration in global_variable_declarations {
+                    if let Node {
+                        kind: NodeKind::GlobalVariableDeclaration { local_variable },
+                        ..
+                    } = global_variable_declaration
+                    {
+                        println!("{}:", local_variable.name);
+                        println!("  .zero {}", local_variable.type_.size());
+                    }
+                }
+                for (index, string) in strings.iter().enumerate() {
+                    println!(".LC{}:", index);
+                    println!("  .string \"{}\"", string);
+                }
                 for function_definition in function_definitions {
                     if let Node {
-                        kind: NodeKind::FunctionDefinition { name, block },
+                        kind:
+                            NodeKind::FunctionDefinition {
+                                name,
+                                local_variables,
+                                block,
+                            },
                         ..
                     } = function_definition
                     {
@@ -26,13 +48,21 @@ impl CodeGenerator {
                         println!("{}:", name);
                         println!("  push rbp");
                         println!("  mov rbp, rsp");
-                        println!("  sub rsp, 16"); // TODO: Adjust 16 for local variables count.
+                        let mut sum: u32 = 0;
+                        for (_, local_variable) in local_variables {
+                            sum += local_variable.type_.size();
+                        }
+                        println!("  sub rsp, {}", align(sum, 8));
                         self.generate(*block);
                     }
                 }
             }
             NodeKind::Integer { value } => {
                 println!("  push {}", value);
+            }
+            NodeKind::String { index } => {
+                println!("  lea rax, .LC{}[rip]", index);
+                println!("  push rax");
             }
             NodeKind::Reference { value } => match value.type_.clone() {
                 Type::Array { .. } => {
@@ -44,7 +74,7 @@ impl CodeGenerator {
             },
             NodeKind::Dereference { value } => {
                 self.generate(*value);
-                self.load();
+                self.load(node.type_);
             }
             NodeKind::Add { left, right } => {
                 self.generate(*left);
@@ -95,15 +125,18 @@ impl CodeGenerator {
                 self.generate(*right);
                 self.store();
             }
-            NodeKind::LocalVariable { .. } => match node.type_.clone() {
-                Type::Array { .. } => {
-                    self.generate_address_of(node);
+            NodeKind::LocalVariable { .. } => {
+                let type_ = node.type_.clone();
+                match type_ {
+                    Type::Array { .. } => {
+                        self.generate_address_of(node);
+                    }
+                    _ => {
+                        self.generate_address_of(node);
+                        self.load(type_);
+                    }
                 }
-                _ => {
-                    self.generate_address_of(node);
-                    self.load();
-                }
-            },
+            }
             NodeKind::Return { value } => {
                 self.generate(*value);
                 self.return_();
@@ -186,8 +219,12 @@ impl CodeGenerator {
                 generate(*value);
             }
             NodeKind::LocalVariable { local_variable } => {
-                println!("  mov rax, rbp");
-                println!("  sub rax, {}", local_variable.offset);
+                if local_variable.global {
+                    println!("  lea rax, {}[rip]", local_variable.name);
+                } else {
+                    println!("  mov rax, rbp");
+                    println!("  sub rax, {}", local_variable.offset);
+                }
                 println!("  push rax");
             }
             _ => {
@@ -196,9 +233,13 @@ impl CodeGenerator {
         }
     }
 
-    fn load(&self) {
+    fn load(&self, type_: Type) {
         println!("  pop rax");
-        println!("  mov rax, [rax]");
+        if type_.size() == 1 {
+            println!("  movsx rax, BYTE PTR [rax]");
+        } else {
+            println!("  mov rax, [rax]");
+        }
         println!("  push rax");
     }
 
@@ -215,4 +256,8 @@ impl CodeGenerator {
         println!("  pop rbp");
         println!("  ret");
     }
+}
+
+fn align(target: u32, unit: u32) -> u32 {
+    (target + unit) & !(unit - 1)
 }
