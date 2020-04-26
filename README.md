@@ -21,11 +21,11 @@ $ cargo run -- "int main() { return 1; }"
     Finished dev [unoptimized + debuginfo] target(s) in 0.47s
      Running `target/debug/r8cc 'int main() { return 1; }'`
 .intel_syntax noprefix
+.data
 .global main
 main:
   push rbp
   mov rbp, rsp
-  sub rsp, 16
   push 1
   pop rax
   mov rsp, rbp
