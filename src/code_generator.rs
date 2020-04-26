@@ -52,7 +52,10 @@ impl CodeGenerator {
                         for (_, local_variable) in local_variables {
                             sum += local_variable.type_.size();
                         }
-                        println!("  sub rsp, {}", align(sum, 8));
+                        let size = align(sum, 8);
+                        if size > 0 {
+                            println!("  sub rsp, {}", size);
+                        }
                         self.generate(*block);
                     }
                 }
