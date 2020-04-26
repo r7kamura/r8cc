@@ -259,5 +259,5 @@ impl CodeGenerator {
 }
 
 fn align(target: u32, unit: u32) -> u32 {
-    (target + unit) & !(unit - 1)
+    (target + unit - 1) & !(unit - 1)
 }
